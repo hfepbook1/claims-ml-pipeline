@@ -8,7 +8,7 @@ st.title("Claim Cost Prediction")
 st.write("Enter claim details to predict the expected claim cost.")
 
 # Define backend URL from st.secrets or use default localhost
-BACKEND_URL = st.secrets["backend_url"] if "backend_url" in st.secrets else "http://localhost:8000"
+BACKEND_URL = st.secrets["backend_url"] if "backend_url" in st.secrets else "https://healthcare-claims-ml-pipeline.onrender.com"
 
 # Input form for single prediction
 with st.form("cost_form"):
