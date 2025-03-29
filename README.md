@@ -1,41 +1,54 @@
-#🏥 Healthcare Claims ML Pipeline  
-A complete end-to-end machine learning project that predicts healthcare claims outcomes using synthetic data and XGBoost. The project includes:
+# 🏥 Healthcare Claims ML Pipeline
 
-📊 **Exploratory Data Analysis (EDA) & Feature Engineering**  
-- Data generation for synthetic patient-level claims data  
-- Handling missing values with imputation strategies  
-- Visualizing distributions, correlations, and transformations (e.g., log transformation for skewed cost)
+A complete end-to-end machine learning project that predicts healthcare claims outcomes using synthetic data and XGBoost. This project includes:
 
-🧠 **Model Training & Tuning**  
-- Training pipelines for three tasks:
-  - **Claim Cost Prediction** (Regression)  
-  - **Fraud Detection** (Classification)  
-  - **30-Day Readmission Prediction** (Classification)  
-- Models built using XGBoost and scikit-learn  
-- Preprocessing pipelines combining imputation, one-hot encoding, and scaling  
-- Hyperparameter tuning (GridSearchCV optional)
+---
 
-⚙️ **Backend API**  
-- FastAPI backend serving real-time predictions and retraining endpoints  
-- Automatic interactive API documentation via Swagger UI
+## 📊 Exploratory Data Analysis (EDA) & Feature Engineering
+- **Data Generation:** Synthetic patient-level claims data  
+- **Missing Data:** Handling missing values with imputation strategies  
+- **Visualization:** Distributions, correlations, and transformations (e.g., log transformation for skewed cost)
 
-🎨 **Frontend Interface**  
-- Multipage Streamlit app with separate pages for:
+---
+
+## 🧠 Model Training & Tuning
+- **Training Pipelines for Three Tasks:**
+  - **Claim Cost Prediction** (Regression)
+  - **Fraud Detection** (Classification)
+  - **30-Day Readmission Prediction** (Classification)
+- **Technologies:**
+  - Models built using XGBoost and scikit-learn  
+  - Preprocessing pipelines combining imputation, one-hot encoding, and scaling  
+  - Hyperparameter tuning (GridSearchCV optional)
+
+---
+
+## ⚙️ Backend API
+- **Framework:** FastAPI backend serving real-time predictions and retraining endpoints  
+- **Documentation:** Automatic interactive API docs via Swagger UI
+
+---
+
+## 🎨 Frontend Interface
+- **Platform:** Multipage Streamlit app with dedicated pages for:
   - Home  
   - EDA & Insights  
   - Claim Cost Prediction  
   - Fraud Detection  
-  - 30-Day Readmission Prediction  
-- User-friendly forms for single and batch predictions  
-- Visualizations and clear insights
-
-☁️ **Deployment**  
-- Dockerfile provided for containerizing the FastAPI backend  
-- Deployed on Render/Railway (backend) and Streamlit Cloud (frontend)
+  - 30-Day Readmission Prediction
+- **Features:** 
+  - User-friendly forms for single and batch predictions  
+  - Visualizations and clear insights
 
 ---
 
-##🚀 Installation
+## ☁️ Deployment
+- **Containerization:** Dockerfile provided for containerizing the FastAPI backend  
+- **Hosting:** Deployed on Render/Railway (backend) and Streamlit Cloud (frontend)
+
+---
+
+## 🚀 Installation
 
 1. **Clone the Repository:**
    ```bash
@@ -43,103 +56,108 @@ A complete end-to-end machine learning project that predicts healthcare claims o
    cd healthcare-claims-ml-pipeline
    ```
 
-
 2. **Install Dependencies:**
-
-```bash
-pip install -r requirements.txt
-```
+   ```bash
+   pip install -r requirements.txt
+   ```
 
 3. **Generate Synthetic Data:**
-
-```bash
-python data/generate_synthetic_data.py
-```
-- This command creates data/synthetic_claims.csv.
+   ```bash
+   python data/generate_synthetic_data.py
+   ```
+   *This command creates `data/synthetic_claims.csv`.*
 
 4. **Train the Models:**
+   ```bash
+   python notebooks/train_models.py
+   ```
+   *This script will:*
+   - Load and preprocess the synthetic data.
+   - Split data into training and testing sets.
+   - Train pipelines for claim cost, fraud, and readmission.
+   - Save the trained pipelines and preprocessor into the `models/` folder.
 
-```bash
-python notebooks/train_models.py
-```
-- This will:
-	- Load and preprocess the synthetic data.
-	- Split data into training and testing sets.
-	- Train three pipelines (for claim cost, fraud, and readmission).
-	- Save the trained pipelines and preprocessor into the models/ folder.
-	- Run the FastAPI Backend Locally:
+5. **Run the FastAPI Backend Locally:**
+   ```bash
+   uvicorn backend.main:app --reload
+   ```
+   *Then, open [http://localhost:8000/docs](http://localhost:8000/docs) to view the interactive API documentation.*
 
-```bash
-uvicorn backend.main:app --reload
-```
-- Open http://localhost:8000/docs to view the interactive API documentation.
+6. **Run the Streamlit Frontend Locally:**
+   ```bash
+   streamlit run frontend/Home.py
+   ```
+   *Use the sidebar to navigate between pages.*
 
-**Run the Streamlit Frontend Locally:**
-```bash
-streamlit run frontend/Home.py
-```
+---
 
-- Use the sidebar to navigate between pages.
+## 🌟 Features
 
-##🌟 Features
-**Real-Time Predictions:**
+- **Real-Time Predictions:**  
+  Get predictions for claim cost, fraud, and 30-day readmission based on user input.
 
-- Get predictions for claim cost, fraud, and 30-day readmission based on user input.
+- **Comprehensive EDA:**  
+  Detailed visualizations including distributions (with log transformations if needed), correlation heatmaps, and boxplots.
 
-**Comprehensive EDA:**
+- **End-to-End Model Pipelines:**  
+  Preprocessing (imputation, encoding, scaling) combined with XGBoost models.
 
-- View detailed data visualizations, including distributions (with log transformations if needed), correlation heatmaps, and boxplots.
+- **API Integration:**  
+  FastAPI backend with endpoints for predictions and retraining, including file uploads for batch operations.
 
-**Model Pipelines:**
+- **User-Friendly UI:**  
+  Intuitive, multipage Streamlit interface with forms and downloadable results.
 
-- End-to-end pipelines combining preprocessing (imputation, encoding, scaling) and XGBoost models.
+- **Deployment Ready:**  
+  Dockerfile for backend containerization, with deployment on Render/Railway and Streamlit Cloud.
 
-**API Integration:**
+---
 
-- FastAPI backend with endpoints for predictions and retraining (supports file uploads for batch operations).
+## 🔗 Live Demo
 
-**User-Friendly UI:**
+👉 [Try the live app here](https://your-streamlit-app-url.streamlit.app)
 
-- Streamlit multipage interface with intuitive navigation, forms, and downloadable results.
+---
 
-**Deployment Ready:**
+## 📊 Model Performance
 
-- Dockerfile provided for backend containerization.
-- Deployed on Render/Railway (backend) and Streamlit Cloud (frontend).
+- **Claim Cost Prediction:**
+  - **Best Model:** XGBoost Regressor
+  - **R² Score:** e.g., 0.82
+  - **RMSE:** e.g., ~$4,500
 
-##🔗 Live Demo
-👉 Try the live app here: https://your-streamlit-app-url.streamlit.app
+- **Fraud Detection:**
+  - **Best Model:** XGBoost Classifier
+  - **Accuracy:** e.g., 95%
 
+- **30-Day Readmission Prediction:**
+  - **Best Model:** XGBoost Classifier
+  - **Accuracy:** e.g., 88%  
+  *(Parameters tuned using GridSearchCV and compared against multiple baselines.)*
 
-##📊 Model Performance
-**Claim Cost Prediction:**
-- Best Model: XGBoost Regressor
-- R² Score: e.g., 0.82
-- RMSE: e.g., ~$4,500
+---
 
-**Fraud Detection:**
-- Best Model: XGBoost Classifier
-- Accuracy: e.g., 95%
+## 💡 Technologies Used
 
-**30-Day Readmission Prediction:**
-- Best Model: XGBoost Classifier
-- Accuracy: e.g., 88%
-- Parameters were tuned using GridSearchCV (optional) and compared against multiple baselines.
+- **Programming Language:** Python  
+- **Data Manipulation:** Pandas, NumPy  
+- **Visualization:** Matplotlib, Seaborn  
+- **Modeling:** Scikit-learn, XGBoost  
+- **Backend:** FastAPI, Uvicorn  
+- **Frontend:** Streamlit  
+- **Containerization:** Docker  
+- **Version Control:** Git & GitHub  
 
-##💡 Technologies Used
-- Programming Language: Python
-- Data Manipulation: Pandas, NumPy
-- Visualization: Matplotlib, Seaborn
-- Modeling: Scikit-learn, XGBoost
-- Backend: FastAPI, Uvicorn
-- Frontend: Streamlit
-- Containerization: Docker
-- Version Control: Git & GitHub
+---
 
-##🤝 Contributions
-- This project is open for feedback, improvement, and collaboration. Feel free to fork, star, and open issues or pull requests!
+## 🤝 Contributions
 
-##📜 License
-- This project is licensed under the MIT License.
+This project is open for feedback, improvement, and collaboration. Feel free to fork, star, and open issues or pull requests!
 
+---
 
+## 📜 License
+
+This project is licensed under the MIT License.
+
+---
