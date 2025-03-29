@@ -115,7 +115,7 @@ A complete end-to-end machine learning project that predicts healthcare claims o
 
 ## 🔗 Live Demo
 
-👉 [Try the live app here](https://your-streamlit-app-url.streamlit.app)
+👉 [Try the live app here](https://healthcare-claims-ml-pipeline-qj2r7efvcdmkuks9vfwppr.streamlit.app/)
 
 ---
 
