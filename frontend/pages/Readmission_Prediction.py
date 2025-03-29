@@ -7,7 +7,7 @@ import numpy as np
 st.title("30-Day Readmission Prediction")
 st.write("Enter claim details to predict whether the patient will be readmitted within 30 days.")
 
-BACKEND_URL = st.secrets["backend_url"] if "backend_url" in st.secrets else "http://localhost:8000"
+BACKEND_URL = st.secrets["backend_url"] if "backend_url" in st.secrets else "https://healthcare-claims-ml-pipeline.onrender.com"
 
 with st.form("readmit_form"):
     age = st.number_input("Age", min_value=0, max_value=120, value=50)
