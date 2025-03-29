@@ -1,4 +1,4 @@
-🏥 Healthcare Claims ML Pipeline  
+#🏥 Healthcare Claims ML Pipeline  
 A complete end-to-end machine learning project that predicts healthcare claims outcomes using synthetic data and XGBoost. The project includes:
 
 📊 **Exploratory Data Analysis (EDA) & Feature Engineering**  
@@ -35,7 +35,7 @@ A complete end-to-end machine learning project that predicts healthcare claims o
 
 ---
 
-🚀 **Installation**
+##🚀 Installation
 
 1. **Clone the Repository:**
    ```bash
@@ -55,111 +55,91 @@ pip install -r requirements.txt
 ```bash
 python data/generate_synthetic_data.py
 ```
-This command creates data/synthetic_claims.csv.
+- This command creates data/synthetic_claims.csv.
 
 4. **Train the Models:**
 
-bash
-Copy
+```bash
 python notebooks/train_models.py
-This will:
+```
+- This will:
+	- Load and preprocess the synthetic data.
+	- Split data into training and testing sets.
+	- Train three pipelines (for claim cost, fraud, and readmission).
+	- Save the trained pipelines and preprocessor into the models/ folder.
+	- Run the FastAPI Backend Locally:
 
-Load and preprocess the synthetic data.
-
-Split data into training and testing sets.
-
-Train three pipelines (for claim cost, fraud, and readmission).
-
-Save the trained pipelines and preprocessor into the models/ folder.
-
-Run the FastAPI Backend Locally:
-
-bash
-Copy
+```bash
 uvicorn backend.main:app --reload
-Open http://localhost:8000/docs to view the interactive API documentation.
+```
+- Open http://localhost:8000/docs to view the interactive API documentation.
 
-Run the Streamlit Frontend Locally:
-
-bash
-Copy
+**Run the Streamlit Frontend Locally:**
+```bash
 streamlit run frontend/Home.py
-Use the sidebar to navigate between pages.
+```
 
-🌟 Features
-Real-Time Predictions:
+- Use the sidebar to navigate between pages.
 
-Get predictions for claim cost, fraud, and 30-day readmission based on user input.
+##🌟 Features
+**Real-Time Predictions:**
 
-Comprehensive EDA:
+- Get predictions for claim cost, fraud, and 30-day readmission based on user input.
 
-View detailed data visualizations, including distributions (with log transformations if needed), correlation heatmaps, and boxplots.
+**Comprehensive EDA:**
 
-Model Pipelines:
+- View detailed data visualizations, including distributions (with log transformations if needed), correlation heatmaps, and boxplots.
 
-End-to-end pipelines combining preprocessing (imputation, encoding, scaling) and XGBoost models.
+**Model Pipelines:**
 
-API Integration:
+- End-to-end pipelines combining preprocessing (imputation, encoding, scaling) and XGBoost models.
 
-FastAPI backend with endpoints for predictions and retraining (supports file uploads for batch operations).
+**API Integration:**
 
-User-Friendly UI:
+- FastAPI backend with endpoints for predictions and retraining (supports file uploads for batch operations).
 
-Streamlit multipage interface with intuitive navigation, forms, and downloadable results.
+**User-Friendly UI:**
 
-Deployment Ready:
+- Streamlit multipage interface with intuitive navigation, forms, and downloadable results.
 
-Dockerfile provided for backend containerization.
+**Deployment Ready:**
 
-Deployed on Render/Railway (backend) and Streamlit Cloud (frontend).
+- Dockerfile provided for backend containerization.
+- Deployed on Render/Railway (backend) and Streamlit Cloud (frontend).
 
-🔗 Live Demo
+##🔗 Live Demo
 👉 Try the live app here: https://your-streamlit-app-url.streamlit.app
 
-📊 Model Performance
-Claim Cost Prediction:
 
-Best Model: XGBoost Regressor
+##📊 Model Performance
+**Claim Cost Prediction:**
+- Best Model: XGBoost Regressor
+- R² Score: e.g., 0.82
+- RMSE: e.g., ~$4,500
 
-R² Score: e.g., 0.82
+**Fraud Detection:**
+- Best Model: XGBoost Classifier
+- Accuracy: e.g., 95%
 
-RMSE: e.g., ~$4,500
+**30-Day Readmission Prediction:**
+- Best Model: XGBoost Classifier
+- Accuracy: e.g., 88%
+- Parameters were tuned using GridSearchCV (optional) and compared against multiple baselines.
 
-Fraud Detection:
+##💡 Technologies Used
+- Programming Language: Python
+- Data Manipulation: Pandas, NumPy
+- Visualization: Matplotlib, Seaborn
+- Modeling: Scikit-learn, XGBoost
+- Backend: FastAPI, Uvicorn
+- Frontend: Streamlit
+- Containerization: Docker
+- Version Control: Git & GitHub
 
-Best Model: XGBoost Classifier
+##🤝 Contributions
+- This project is open for feedback, improvement, and collaboration. Feel free to fork, star, and open issues or pull requests!
 
-Accuracy: e.g., 95%
-
-30-Day Readmission Prediction:
-
-Best Model: XGBoost Classifier
-
-Accuracy: e.g., 88%
-
-Parameters were tuned using GridSearchCV (optional) and compared against multiple baselines.
-
-💡 Technologies Used
-Programming Language: Python
-
-Data Manipulation: Pandas, NumPy
-
-Visualization: Matplotlib, Seaborn
-
-Modeling: Scikit-learn, XGBoost
-
-Backend: FastAPI, Uvicorn
-
-Frontend: Streamlit
-
-Containerization: Docker
-
-Version Control: Git & GitHub
-
-🤝 Contributions
-This project is open for feedback, improvement, and collaboration. Feel free to fork, star, and open issues or pull requests!
-
-📜 License
-This project is licensed under the MIT License.
+##📜 License
+- This project is licensed under the MIT License.
 
 
