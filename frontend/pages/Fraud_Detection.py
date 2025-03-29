@@ -7,7 +7,7 @@ import numpy as np
 st.title("Fraud Detection")
 st.write("Enter claim details to predict whether the claim is fraudulent.")
 
-BACKEND_URL = st.secrets["backend_url"] if "backend_url" in st.secrets else "http://localhost:8000"
+BACKEND_URL = st.secrets["backend_url"] if "backend_url" in st.secrets else "https://healthcare-claims-ml-pipeline.onrender.com"
 
 with st.form("fraud_form"):
     age = st.number_input("Age", min_value=0, max_value=120, value=50)
