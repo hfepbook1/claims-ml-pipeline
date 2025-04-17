@@ -8,7 +8,9 @@ BACKEND_URL = st.secrets.get("backend_url", "https://healthcare-claims-ml-pipeli
 st.sidebar.info("Use the sidebar to jump to each section of the app.")
 
 # Main Page Content
+st.set_page_config(page_title="Healthcare Claims ML Pipeline", page_icon="🏥", layout="wide")
 st.title("Healthcare Claims ML Pipeline")
+
 st.markdown("""
 Welcome to the **Healthcare Claims ML Pipeline** app!  
 This application demonstrates an end-to-end machine learning pipeline for healthcare claims data. It offers predictive insights for:
