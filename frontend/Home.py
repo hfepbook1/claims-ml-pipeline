@@ -2,7 +2,7 @@
 import streamlit as st
 
 # Main Page Content
-st.set_page_config(page_title="Healthcare Claims ML Pipeline", page_icon="🏥", layout="wide")
+st.set_page_config(page_title="Healthcare Claims ML Pipeline", page_icon="🏥")
 st.title("Healthcare Claims ML Pipeline")
 
 # Use st.secrets if available; otherwise default to localhost.
