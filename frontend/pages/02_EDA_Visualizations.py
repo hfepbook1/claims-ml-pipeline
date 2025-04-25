@@ -158,14 +158,14 @@ with tab_dashboard:
     st.subheader("Claim Cost Distribution")
     scale = st.radio("Cost Scale", ["Raw", "Log"], horizontal=True)
     if scale == "Log":
-        df_filtered["cost_plot"] = np.log1p(df_filtered["claim_cost"])
+        df["cost_plot"] = np.log1p(df["claim_cost"])
         x_label = "Log(Claim Cost + 1)"
     else:
-        df_filtered["cost_plot"] = df_filtered["claim_cost"]
+        df["cost_plot"] = df["claim_cost"]
         x_label = "Claim Cost (USD)"
 
     fig_cost_dist = px.histogram(
-        df_filtered,
+        df,
         x="cost_plot",
         nbins=50,
         title=f"{scale} Claim Cost Distribution",
@@ -181,7 +181,7 @@ with tab_dashboard:
     # --- Boxplot by Provider Type ---
     st.subheader("Claim Cost by Provider Type")
     fig_cost_provider = px.box(
-        df_filtered,
+        df,
         x="provider_type",
         y="claim_cost",
         title="Claim Cost by Provider Type",
@@ -198,7 +198,7 @@ with tab_dashboard:
     # --- Correlation Heatmap with Reversed Palette ---
     st.subheader("Feature Correlation Heatmap")
     num_cols = ['age', 'chronic_condition_count', 'num_visits', 'num_er_visits', 'num_inpatient_stays', 'claim_cost']
-    corr = df_filtered[num_cols].corr()
+    corr = df[num_cols].corr()
     fig_heat = px.imshow(
         corr,
         text_auto=True,
