@@ -9,13 +9,13 @@ import plotly.graph_objects as go
 # Page configuration
 st.set_page_config(page_title="Healthcare Claims Dashboard", layout="wide")
 
-# Data loading / simulation
+# Load or simulate data
 @st.cache_data
 def load_data():
     try:
-        df = pd.read_csv("data/synthetic_claims.csv", parse_dates=["claim_date"])
+        df = pd.read_csv("data/synthetic_claims.csv")
     except FileNotFoundError:
-        # Simulate synthetic data if CSV not found
+        # simulate if missing
         np.random.seed(42)
         n = 10000
         df = pd.DataFrame({
@@ -30,11 +30,11 @@ def load_data():
             "is_fraud": np.random.choice([0, 1], size=n, p=[0.95, 0.05]),
             "readmit_30d": np.random.choice([0, 1], size=n, p=[0.9, 0.1]),
         })
-        df["claim_date"] = (
-            pd.to_datetime("2023-01-01") +
-            pd.to_timedelta(np.random.randint(0, 365 * 2, size=n), unit="D")
+        # simulate missing claim_date
+        df["claim_date"] = pd.to_datetime("2023-01-01") + pd.to_timedelta(
+            np.random.randint(0, 365*2, size=n), unit="D"
         )
-        # Introduce some missing values
+        # introduce some missing values
         for col in ["gender", "provider_type", "primary_diagnosis", "claim_cost"]:
             df.loc[df.sample(frac=0.02, random_state=42).index, col] = np.nan
     return df
