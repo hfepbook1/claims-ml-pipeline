@@ -154,34 +154,65 @@ with tab_dashboard:
     )
     st.plotly_chart(fig1, use_container_width=True)
 
+    # --- Claim Cost Distribution with Raw/Log Toggle ---
     st.subheader("Claim Cost Distribution")
-    fig2 = px.histogram(
-        df_filtered, x="claim_cost", nbins=50,
-        title="Claim Cost Distribution",
-        labels={"claim_cost": "Claim Cost (USD)"}
-    )
-    st.plotly_chart(fig2, use_container_width=True)
-    st.markdown("Shows right-skewed distribution—plan for outliers.")
+    scale = st.radio("Cost Scale", ["Raw", "Log"], horizontal=True)
+    if scale == "Log":
+        df_filtered["cost_plot"] = np.log1p(df_filtered["claim_cost"])
+        x_label = "Log(Claim Cost + 1)"
+    else:
+        df_filtered["cost_plot"] = df_filtered["claim_cost"]
+        x_label = "Claim Cost (USD)"
 
-    st.subheader("Cost by Provider Type")
-    fig3 = px.box(
-        df_filtered, x="provider_type", y="claim_cost",
+    fig_cost_dist = px.histogram(
+        df_filtered,
+        x="cost_plot",
+        nbins=50,
+        title=f"{scale} Claim Cost Distribution",
+        labels={"cost_plot": x_label, "count": "Frequency"}
+    )
+    st.plotly_chart(fig_cost_dist, use_container_width=True)
+    st.markdown(
+        f"This shows the {scale.lower()} distribution of claim cost. "
+        + ("Log transform reveals the bulk of data when skew is high." 
+           if scale == "Log" else "Raw view highlights skew and outliers.")
+    )
+
+    # --- Boxplot by Provider Type ---
+    st.subheader("Claim Cost by Provider Type")
+    fig_cost_provider = px.box(
+        df_filtered,
+        x="provider_type",
+        y="claim_cost",
         title="Claim Cost by Provider Type",
         points="all",
-        labels={"provider_type": "Provider Type", "claim_cost": "Cost (USD)"}
+        labels={"provider_type": "Provider Type", "claim_cost": "Claim Cost (USD)"}
     )
-    st.plotly_chart(fig3, use_container_width=True)
-    st.markdown("Hospitals trend higher costs than clinics or labs.")
+    # use inclusive quartile for more precise whiskers
+    fig_cost_provider.update_traces(quartilemethod="inclusive")
+    st.plotly_chart(fig_cost_provider, use_container_width=True)
+    st.markdown(
+        "This box plot compares median, IQR, and outliers by provider; hospitals typically show higher costs."
+    )
 
-    st.subheader("Correlation Heatmap")
-    num_df = df_filtered.select_dtypes(include=np.number)
-    corr = num_df.corr()
-    fig4 = px.imshow(
-        corr, text_auto=True, aspect="auto",
-        title="Numeric Feature Correlation"
+    # --- Correlation Heatmap with Reversed Palette ---
+    st.subheader("Feature Correlation Heatmap")
+    num_cols = ['age', 'chronic_condition_count', 'num_visits', 'num_er_visits', 'num_inpatient_stays', 'claim_cost']
+    corr = df_filtered[num_cols].corr()
+    fig_heat = px.imshow(
+        corr,
+        text_auto=True,
+        aspect="auto",
+        title="Correlation Heatmap (RdBu_r Palette)",
+        color_continuous_scale="RdBu_r",
+        zmin=-1, zmax=1
     )
-    st.plotly_chart(fig4, use_container_width=True)
-    st.markdown("Age, chronic conditions, and cost show strong positive correlation.")
+    st.plotly_chart(fig_heat, use_container_width=True)
+    st.markdown(
+        "Reversed color scale highlights positive correlations in red and negative in blue. "
+        "Note strong links between age, chronic conditions, and claim cost."
+    )
+
 
 # Missing Data Tab
 with tab_missing:
