@@ -92,9 +92,6 @@ if log_option == 'Log':
 else:
     df_filtered['cost_to_plot'] = df_filtered[cost_col]
 
-# Tabs for organized layout
-tabs = st.tabs(["Overview", "Visualizations", "Missing Data"])
-
 # ===== UPDATED Overview Tab =====
 tabs = st.tabs(["Overview", "Visualizations", "Missing Data"])
 with tabs[0]:
