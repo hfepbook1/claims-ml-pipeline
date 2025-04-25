@@ -209,8 +209,7 @@ with tab_dashboard:
     )
     st.plotly_chart(fig_heat, use_container_width=True)
     st.markdown(
-        "Reversed color scale highlights positive correlations in red and negative in blue. "
-        "Note strong links between age, chronic conditions, and claim cost."
+        "Note strong links between inpatient stays and claim cost."
     )
 
 
