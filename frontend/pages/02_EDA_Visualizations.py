@@ -7,7 +7,7 @@ st.title("Claims Data Overview")
 
 # Load data
 try:
-    df = pd.read_csv('synthetic_claims.csv')
+    df = pd.read_csv('data/synthetic_claims.csv')
 except Exception as e:
     st.error("Failed to load data: " + str(e))
     df = pd.DataFrame()
