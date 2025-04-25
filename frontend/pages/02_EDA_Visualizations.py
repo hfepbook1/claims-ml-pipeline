@@ -154,30 +154,34 @@ with tab_dashboard:
     )
     st.plotly_chart(fig1, use_container_width=True)
 
-    # Distribution of claim cost
+    st.subheader("Claim Cost Distribution")
     fig2 = px.histogram(
-        df, x="claim_cost", nbins=50,
-        title="Claim Cost Distribution", labels={"claim_cost": "Cost (USD)"}
+        df_filtered, x="claim_cost", nbins=50,
+        title="Claim Cost Distribution",
+        labels={"claim_cost": "Claim Cost (USD)"}
     )
     st.plotly_chart(fig2, use_container_width=True)
+    st.markdown("Shows right-skewed distribution—plan for outliers.")
 
-    # Boxplot by provider
+    st.subheader("Cost by Provider Type")
     fig3 = px.box(
-        df, x="provider_type", y="claim_cost",
-        title="Claim Cost by Provider Type", points="all",
-        labels={"provider_type": "Provider", "claim_cost": "Cost (USD)"}
+        df_filtered, x="provider_type", y="claim_cost",
+        title="Claim Cost by Provider Type",
+        points="all",
+        labels={"provider_type": "Provider Type", "claim_cost": "Cost (USD)"}
     )
     st.plotly_chart(fig3, use_container_width=True)
+    st.markdown("Hospitals trend higher costs than clinics or labs.")
 
-    # Correlation heatmap with reversed palette
-    num_cols = ["age", "chronic_condition_count", "claim_cost", "is_fraud", "readmit_30d"]
-    corr = df[num_cols].corr()
+    st.subheader("Correlation Heatmap")
+    num_df = df_filtered.select_dtypes(include=np.number)
+    corr = num_df.corr()
     fig4 = px.imshow(
         corr, text_auto=True, aspect="auto",
-        title="Feature Correlation",
-        color_continuous_scale="RdBu_r", zmin=-1, zmax=1
+        title="Numeric Feature Correlation"
     )
     st.plotly_chart(fig4, use_container_width=True)
+    st.markdown("Age, chronic conditions, and cost show strong positive correlation.")
 
 # Missing Data Tab
 with tab_missing:
