@@ -1,5 +1,11 @@
 # 🏥 Healthcare Claims ML Pipeline
 
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-FF4B4B?style=flat&logo=streamlit&logoColor=white)]([https://sports-predictor.streamlit.app](https://healthcare-claims-ml-pipeline-qj2r7efvcdmkuks9vfwppr.streamlit.app/))
+![Python 3.10](https://img.shields.io/badge/Python%203.10-blue?style=flat&logo=python&logoColor=white)
+![Streamlit](https://img.shields.io/badge/Streamlit-FF4B4B?style=flat&logo=streamlit&logoColor=white)
+![License: MIT](https://img.shields.io/badge/License-MIT-green?style=flat)
+![Last Updated](https://img.shields.io/badge/Last%20Updated-May%202025-brightgreen?style=flat)
+
 A complete end-to-end machine learning project that predicts healthcare claims outcomes using synthetic data and XGBoost. This project includes:
 
 ---
