@@ -1,4 +1,4 @@
-# 🏥 Healthcare Claims ML Pipeline
+# 🏥 Insurance Claims ML Pipeline
 
 [![Live Demo](https://img.shields.io/badge/Live%20Demo-FF4B4B?style=flat&logo=streamlit&logoColor=white)](https://healthcare-claims-ml-pipeline-qj2r7efvcdmkuks9vfwppr.streamlit.app/)
 ![License: MIT](https://img.shields.io/badge/License-MIT-green?style=flat)
