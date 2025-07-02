@@ -1,5 +1,5 @@
 # frontend/Home.py
-import streamlit as st
+import os, streamlit as st, mlflow
 
 # Main Page Content
 st.set_page_config(page_title="Healthcare Claims ML Pipeline", page_icon="🏥")
@@ -7,6 +7,13 @@ st.title("Healthcare Claims ML Pipeline")
 
 # Use st.secrets if available; otherwise default to localhost.
 BACKEND_URL = st.secrets.get("backend_url", "https://healthcare-claims-ml-pipeline.onrender.com")
+
+# 1️⃣ Read secrets safely
+os.environ["DATABRICKS_HOST"]  = st.secrets["DATABRICKS_HOST"]
+os.environ["DATABRICKS_TOKEN"] = st.secrets["DATABRICKS_TOKEN"]
+
+# 2️⃣ Tell MLflow to use Databricks
+mlflow.set_tracking_uri("databricks")
 
 # Sidebar Navigation
 st.sidebar.info("Use the sidebar to jump to each section of the app.")
