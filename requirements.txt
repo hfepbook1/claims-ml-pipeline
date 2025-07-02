@@ -12,3 +12,4 @@ streamlit
 requests
 python-multipart
 plotly
+mlflow
