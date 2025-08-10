@@ -29,20 +29,20 @@ jobs:
         run: |
           # Ensure Databricks repo is on latest GitHub commit
           # (This pulls the specified branch from GitHub into the Databricks workspace repo)
-          databricks repos update "/Repos/<YOUR_USER>/claims-ml-pipeline" --branch main
+          databricks repos update "/Workspace/Repos/tpjcw0309@gmail.com/claims-ml-pipeline" --branch main
 
       # Step 4: Export Databricks workspace dir to local runner
       - name: Export Databricks workspace to local
         run: |
           # Export the entire repository directory from Databricks workspace to the current directory
           # (Overwrite local files with any changes from Databricks)
-          databricks workspace export-dir "/Repos/<YOUR_USER>/claims-ml-pipeline" . --overwrite
+          databricks workspace export-dir "/Workspace/Repos/tpjcw0309@gmail.com/claims-ml-pipeline" --overwrite
 
       # Step 5: Commit and push changes back to GitHub
       - name: Commit and Push to GitHub
         run: |
           git config user.name "databricks-bot"
-          git config user.email "databricks-bot@example.com"
+          git config user.email "tpjcw0309@gmail.com"
           # Check for any changes (added, modified, removed files)
           if [[ -n "$(git status --porcelain)" ]]; then
             echo "Changes detected. Committing and pushing..."
