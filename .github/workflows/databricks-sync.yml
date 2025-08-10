@@ -1,1 +1,66 @@
+name: Databricks Sync  # Name of the workflow
+
+# Run on a schedule (daily at midnight UTC) and on manual trigger
+on:
+  schedule:
+    - cron: '0 0 * * *'   # Every day at 00:00 UTC:contentReference[oaicite:13]{index=13}
+  workflow_dispatch:      # Allow manual trigger from GitHub UI
+
+# Workflow jobs and permissions
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    # Pass Databricks credentials to the job from secrets
+    env:
+      DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+      DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+    steps:
+      # Step 1: Check out the repository code
+      - name: Checkout Repo
+        uses: actions/checkout@v3
+
+      # Step 2: Set up Databricks CLI
+      - name: Install Databricks CLI
+        # Use official Databricks GitHub Action to install CLI and dependencies
+        uses: databricks/setup-cli@v1
+
+      # Step 3: Update Databricks repo to match latest GitHub (pull GH changes into Databricks)
+      - name: Sync GitHub changes to Databricks
+        run: |
+          # Ensure Databricks repo is on latest GitHub commit
+          # (This pulls the specified branch from GitHub into the Databricks workspace repo)
+          databricks repos update "/Repos/<YOUR_USER>/claims-ml-pipeline" --branch main
+
+      # Step 4: Export Databricks workspace dir to local runner
+      - name: Export Databricks workspace to local
+        run: |
+          # Export the entire repository directory from Databricks workspace to the current directory
+          # (Overwrite local files with any changes from Databricks)
+          databricks workspace export-dir "/Repos/<YOUR_USER>/claims-ml-pipeline" . --overwrite
+
+      # Step 5: Commit and push changes back to GitHub
+      - name: Commit and Push to GitHub
+        run: |
+          git config user.name "databricks-bot"
+          git config user.email "databricks-bot@example.com"
+          # Check for any changes (added, modified, removed files)
+          if [[ -n "$(git status --porcelain)" ]]; then
+            echo "Changes detected. Committing and pushing..."
+            git add -A
+            git commit -m "🔄 Daily sync from Databricks ($(date -u +'%Y-%m-%d %H:%M UTC'))"
+            git push
+          else
+            echo "No changes to commit. Repository is already up-to-date."
+          fi
+
+      # Step 6: Notify on failure (e.g., via Slack)
+      - name: Notify on Failure
+        if: ${{ failure() }}
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          echo "Sync failed! Sending notification..."
+          # Post a message to Slack (ensure SLACK_WEBHOOK_URL is added in repo secrets)
+          payload='{"text": ":x: **Databricks Sync Failed** – Please check the GitHub Actions logs for details."}'
+          curl -X POST -H 'Content-type: application/json' --data "$payload" "$SLACK_WEBHOOK_URL"
 
