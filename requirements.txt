@@ -8,7 +8,7 @@ python-multipart
 plotly
 numpy==1.24.3             # For numerical computing (pinned for sklearn>=1.2 compatibility)
 pandas==1.4.4            # DataFrame library (version from DB runtime for stability)
-scikit-learn==1.2.2      # ML algorithms library (as used in notebooks):contentReference[oaicite:5]{index=5}
+scikit-learn
 imbalanced-learn==0.10.1 # SMOTE and other tools for class imbalance (compatible with sklearn 1.2)
 xgboost==1.7.6           # Gradient boosting library for models:contentReference[oaicite:6]{index=6}
 mlflow==2.3.2            # MLflow for experiment tracking:contentReference[oaicite:7]{index=7}
