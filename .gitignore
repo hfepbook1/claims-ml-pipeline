@@ -1,0 +1,11 @@
+# Large data & generated artifacts
+data/*.csv
+data/*.parquet
+data/**/*.csv
+models/*.pkl
+models/**/*.pkl
+
+# IDE & notebook noise
+.vs/
+.ipynb_checkpoints/
+.DS_Store
