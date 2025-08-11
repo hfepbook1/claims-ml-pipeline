@@ -38,12 +38,23 @@ def load_data():
     # Add simulated geo location (state) and member IDs for analysis
     np.random.seed(0)  # seed for reproducibility of random assignment
     region_to_states = {
-        "Northeast": ["NY", "PA", "MA"],
-        "Midwest": ["IL", "OH", "MI"],
-        "South": ["TX", "FL", "GA"],
-        "West": ["CA", "WA", "AZ"],
-        "North": ["MN", "IL", "WI"],
-        "East": ["NY", "NJ", "MA"]
+        "Northeast": [
+            "CT","ME","MA","NH","RI","VT",  # New England
+            "NJ","NY","PA"                  # Mid-Atlantic
+        ],
+        "Midwest": [
+            "IL","IN","MI","OH","WI",       # East North Central
+            "IA","KS","MN","MO","NE","ND","SD"  # West North Central
+        ],
+        "South": [
+            "DE","FL","GA","MD","NC","SC","VA","DC","WV",  # South Atlantic
+            "AL","KY","MS","TN",                            # East South Central
+            "AR","LA","OK","TX"                             # West South Central
+        ],
+        "West": [
+            "AZ","CO","ID","MT","NV","NM","UT","WY",  # Mountain
+            "AK","CA","HI","OR","WA"                  # Pacific
+        ]
     }
     df["state"] = df["region"].apply(lambda r: np.random.choice(region_to_states.get(r, ["Unknown"])))
     # Simulate member IDs (anonymized patient identifiers)
