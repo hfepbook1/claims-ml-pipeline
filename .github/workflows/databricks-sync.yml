@@ -42,13 +42,11 @@ jobs:
 
       - name: Pull latest GitHub into Databricks Repos
         run: |
-          # Use the correct branch name here (main vs master)
+          # Use correct branch (main or master)
           databricks repos update "$REPO_WS" --branch main || \
           databricks repos update "$REPO_WS" --branch master
 
-      # OPTIONAL: If the workspace repo already contains heavy dirs, delete them
-      # so export won't hit the 10MB limit. Comment these out if you want to keep
-      # data/models INSIDE workspace (not recommended).
+      # Delete heavy paths only INSIDE Databricks workspace (not in GitHub)
       - name: Remove heavy paths in Workspace (pre-export cleanup)
         run: |
           set -e
@@ -56,29 +54,22 @@ jobs:
             databricks workspace delete "$p" --recursive || true
           done
 
+      # Export only code and selected top-level files from Workspace to local
       - name: Export allowlisted folders (skip data/models/.vs)
         run: |
           set -e
-          mkdir -p .github workflows frontend backend notebooks scripts
+          mkdir -p .github frontend backend notebooks scripts
           # Export these directories if they exist
           for d in ".github" "frontend" "backend" "notebooks" "scripts"; do
             databricks workspace export-dir "$REPO_WS/$d" "$d" --overwrite || echo "skip $d"
           done
-          # Export top-level files we care about
+          # Export selected top-level files
           for f in "README.md" "requirements.txt" "pyproject.toml" "setup.cfg" "Dockerfile" ".gitignore"; do
             databricks workspace export "$REPO_WS/$f" "$f" --overwrite || true
           done
 
-      - name: Enforce ignore of heavy artifacts (local cleanup)
-        run: |
-          set -e
-          # Make sure big/generated stuff never gets pushed
-          echo "" >> .gitignore
-          printf "\n# Large data & generated artifacts\ndata/\nmodels/\n.vs/\n.ipynb_checkpoints/\n" >> .gitignore
-          # Remove from index if previously tracked
-          git rm -r --cached data models ".vs" ".ipynb_checkpoints" 2>/dev/null || true
-          # Also delete local copies to avoid re-adding
-          rm -rf data models ".vs" ".ipynb_checkpoints" || true
+      # IMPORTANT: Do NOT delete or untrack data/models locally
+      # They stay in the Git repo unchanged.
 
       - name: Commit and push changes back to GitHub
         run: |
