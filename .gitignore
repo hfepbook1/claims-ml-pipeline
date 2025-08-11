@@ -9,10 +9,3 @@ models/**/*.pkl
 .vs/
 .ipynb_checkpoints/
 .DS_Store
-
-
-# Large data & generated artifacts
-data/
-models/
-.vs/
-.ipynb_checkpoints/
