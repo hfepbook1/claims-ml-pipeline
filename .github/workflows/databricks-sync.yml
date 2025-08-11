@@ -35,8 +35,8 @@ jobs:
       - name: Ensure Databricks repo exists (create if missing)
         run: |
           set -e
-          REPO_PATH="/Repos/tpjcw0309@gmail.com/claims-ml-pipeline"
-          REPO_URL="https://github.com/<OWNER>/<REPO>.git"  # <- update this
+          REPO_PATH="/Workspace/Repos/tpjcw0309@gmail.com/claims-ml-pipeline"
+          REPO_URL="https://github.com/hfepbook1/claims-ml-pipeline.git"  # <- update this
 
           if databricks repos get "$REPO_PATH" >/dev/null 2>&1; then
             echo "Repo exists at $REPO_PATH"
@@ -47,7 +47,7 @@ jobs:
 
       - name: Pull latest GitHub into Databricks Repos
         run: |
-          databricks repos update "/Repos/tpjcw0309@gmail.com/claims-ml-pipeline" --branch main
+          databricks repos update "/Workspace/Repos/tpjcw0309@gmail.com/claims-ml-pipeline" --branch main
         # You can also use a different branch here if needed.
 
       - name: Export Databricks workspace dir to local
