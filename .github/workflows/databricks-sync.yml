@@ -47,7 +47,7 @@ jobs:
 
       - name: Pull latest GitHub into Databricks Repos
         run: |
-          databricks repos update "/Workspace/Repos/tpjcw0309@gmail.com/claims-ml-pipeline" --branch main
+          databricks repos update "/Workspace/Repos/tpjcw0309@gmail.com/claims-ml-pipeline" --branch master
         # You can also use a different branch here if needed.
 
       - name: Export Databricks workspace dir to local
