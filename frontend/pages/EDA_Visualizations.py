@@ -1,5 +1,3 @@
-# frontend/pages/02_EDA_Visualizations.py
-
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -15,7 +13,7 @@ def load_data():
     try:
         df = pd.read_csv("data/synthetic_claims.csv")
     except FileNotFoundError:
-        # simulate if missing
+        # Simulate data if CSV not found
         np.random.seed(42)
         n = 10000
         df = pd.DataFrame({
@@ -30,32 +28,67 @@ def load_data():
             "is_fraud": np.random.choice([0, 1], size=n, p=[0.95, 0.05]),
             "readmit_30d": np.random.choice([0, 1], size=n, p=[0.9, 0.1]),
         })
-        # simulate missing claim_date
+        # Simulate missing claim_date for synthetic data
         df["claim_date"] = pd.to_datetime("2023-01-01") + pd.to_timedelta(
             np.random.randint(0, 365*2, size=n), unit="D"
         )
-        # introduce some missing values
+        # Introduce some missing values in a few columns
         for col in ["gender", "provider_type", "primary_diagnosis", "claim_cost"]:
             df.loc[df.sample(frac=0.02, random_state=42).index, col] = np.nan
+    # Add simulated geo location (state) and member IDs for analysis
+    np.random.seed(0)  # seed for reproducibility of random assignment
+    region_to_states = {
+        "Northeast": ["NY", "PA", "MA"],
+        "Midwest": ["IL", "OH", "MI"],
+        "South": ["TX", "FL", "GA"],
+        "West": ["CA", "WA", "AZ"],
+        "North": ["MN", "IL", "WI"],
+        "East": ["NY", "NJ", "MA"]
+    }
+    df["state"] = df["region"].apply(lambda r: np.random.choice(region_to_states.get(r, ["Unknown"])))
+    # Simulate member IDs (anonymized patient identifiers)
+    unique_members = min(len(df), max(10, int(len(df) * 0.1)))
+    df["member_id"] = np.random.randint(1, unique_members + 1, size=len(df))
     return df
 
 df = load_data()
 
 # Sidebar filters
 st.sidebar.header("Filter Data")
-sel_gender = st.sidebar.multiselect("Gender", options=df["gender"].dropna().unique(), default=df["gender"].dropna().unique())
-sel_region = st.sidebar.multiselect("Region", options=df["region"].dropna().unique(), default=df["region"].dropna().unique())
-sel_provider = st.sidebar.multiselect("Provider Type", options=df["provider_type"].dropna().unique(), default=df["provider_type"].dropna().unique())
-sel_diag = st.sidebar.multiselect("Primary Diagnosis", options=df["primary_diagnosis"].dropna().unique(), default=df["primary_diagnosis"].dropna().unique())
+sel_gender = st.sidebar.multiselect(
+    "Gender", options=df["gender"].dropna().unique(), 
+    default=df["gender"].dropna().unique()
+)
+sel_region = st.sidebar.multiselect(
+    "Region", options=df["region"].dropna().unique(), 
+    default=df["region"].dropna().unique()
+)
+sel_provider = st.sidebar.multiselect(
+    "Provider Type", options=df["provider_type"].dropna().unique(), 
+    default=df["provider_type"].dropna().unique()
+)
+sel_diag = st.sidebar.multiselect(
+    "Primary Diagnosis", options=df["primary_diagnosis"].dropna().unique(), 
+    default=df["primary_diagnosis"].dropna().unique()
+)
+age_min, age_max = int(df["age"].min(skipna=True)), int(df["age"].max(skipna=True))
+age_range = st.sidebar.slider("Age Range", age_min, age_max, (age_min, age_max))
 
+# Apply filters to data
 df = df[
     df["gender"].isin(sel_gender) &
     df["region"].isin(sel_region) &
     df["provider_type"].isin(sel_provider) &
-    df["primary_diagnosis"].isin(sel_diag)
+    df["primary_diagnosis"].isin(sel_diag) &
+    df["age"].between(age_range[0], age_range[1])
 ].copy()
 
-# Ensure claim_date column exists
+# If no data remains after filtering, show warning and stop
+if df.empty:
+    st.warning("No data available for the selected filters. Please adjust the filters.")
+    st.stop()
+
+# Ensure claim_date column exists and create month period
 if "claim_date" not in df.columns:
     df["claim_date"] = (
         pd.to_datetime("2023-01-01") +
@@ -64,7 +97,7 @@ if "claim_date" not in df.columns:
 df["claim_date"] = pd.to_datetime(df["claim_date"])
 df["month"] = df["claim_date"].dt.to_period("M").dt.to_timestamp()
 
-# Monthly aggregates
+# Monthly aggregates for trends
 monthly = df.groupby("month").agg(
     monthly_volume=pd.NamedAgg(column="claim_cost", aggfunc="size"),
     monthly_cost=pd.NamedAgg(column="claim_cost", aggfunc="sum"),
@@ -72,17 +105,18 @@ monthly = df.groupby("month").agg(
     readmit_count=pd.NamedAgg(column="readmit_30d", aggfunc="sum"),
 ).reset_index()
 
-# Forecast next 3 months by 3-month average
+# Forecast next 3 months (simple average-based forecast)
 if len(monthly) >= 3:
     last3 = monthly.tail(3)
     avg_vol = last3["monthly_volume"].mean()
     avg_cost = last3["monthly_cost"].mean()
 else:
-    avg_vol = monthly["monthly_volume"].mean()
-    avg_cost = monthly["monthly_cost"].mean()
+    avg_vol = monthly["monthly_volume"].mean() if len(monthly) > 0 else 0
+    avg_cost = monthly["monthly_cost"].mean() if len(monthly) > 0 else 0
 
 future_months = pd.date_range(
-    monthly["month"].max() + pd.offsets.MonthBegin(1), periods=3, freq="M"
+    monthly["month"].max() + pd.offsets.MonthBegin(1) if not monthly.empty else pd.Timestamp("2023-01-01"), 
+    periods=3, freq="M"
 )
 forecast = pd.DataFrame({
     "month": future_months,
@@ -93,26 +127,26 @@ forecast = pd.DataFrame({
 })
 monthly_full = pd.concat([monthly, forecast], ignore_index=True)
 
-# Compute ROI KPIs
+# Compute key ROI metrics
 total_fraud_cost = df.loc[df["is_fraud"] == 1, "claim_cost"].sum(skipna=True)
-baseline_recall = 0.5
-fraud_lift = 0.60
+baseline_recall = 0.5  # baseline model recall for fraud
+fraud_lift = 0.60      # our model's lift in fraud detection
 avoided_fraud = fraud_lift * (total_fraud_cost / baseline_recall) if baseline_recall else 0
 
 avg_readmit_cost = df.loc[df["readmit_30d"] == 1, "claim_cost"].mean(skipna=True) or 0
-num_readmit = df["readmit_30d"].sum(skipna=True)
-readmission_savings = num_readmit * avg_readmit_cost * 0.15  # assume 15% reduction
+num_readmit = int(df["readmit_30d"].sum(skipna=True))
+readmission_savings = num_readmit * avg_readmit_cost * 0.15  # assume 15% cost reduction from interventions
 
-threshold = df["claim_cost"].quantile(0.90)
-high_cost_pct = (df["claim_cost"] > threshold).mean()
+threshold = df["claim_cost"].quantile(0.90)  # 90th percentile cost
+high_cost_pct = (df["claim_cost"] > threshold).mean()  # % of claims that are high-cost
 flagged = df[df["claim_cost"] >= threshold]
 general = df[df["claim_cost"] < threshold]
 cost_ratio = flagged["claim_cost"].mean() / general["claim_cost"].mean() if len(general) else np.nan
 
-# Tabs
+# Set up tabs for Dashboard and Missing Data analysis
 tab_dashboard, tab_missing = st.tabs(["Dashboard", "Missing Data"])
 
-# Dashboard Tab: ROI then Charts
+# Dashboard Tab: Key metrics and visualizations
 with tab_dashboard:
     st.header("Key ROI Metrics")
     k1, k2, k3, k4 = st.columns(4)
@@ -127,34 +161,35 @@ with tab_dashboard:
 
     st.markdown("""
     - **Reserve Planning:** Forecasts guide fund allocation before large claims arrive.
-    - **Triage Workflow:** Flag >$20k claims for senior adjusters; fast-track low-cost ones.
-    - **Fraud ROI:** 60% lift in detection directly reduces losses.
-    - **Preventive Care:** Target top 10% high-cost patients for maximum impact.
-    - **Case Management:** 15% fewer readmissions improves outcomes and cuts costs.
+    - **Triage Workflow:** Flag high-cost (>$20k) claims for senior adjusters; fast-track low-cost ones.
+    - **Fraud ROI:** 60% lift in detection directly reduces losses from fraudulent claims.
+    - **Preventive Care:** Target top 10% high-cost patients for proactive care to maximize impact.
+    - **Case Management:** 15% fewer readmissions improves patient outcomes and cuts repeat costs.
     """)
 
     st.header("Claims Trend & Distributions")
 
-    # Time-series volume & cost
-    fig1 = go.Figure()
-    fig1.add_trace(go.Scatter(
+    # Monthly trends: claim volume and cost over time (with simple forecast)
+    fig_trend = go.Figure()
+    fig_trend.add_trace(go.Scatter(
         x=monthly_full["month"], y=monthly_full["monthly_volume"],
-        mode="lines+markers", name="Volume"
+        mode="lines+markers", name="Monthly Volume"
     ))
-    fig1.add_trace(go.Scatter(
+    fig_trend.add_trace(go.Scatter(
         x=monthly_full["month"], y=monthly_full["monthly_cost"],
-        mode="lines+markers", name="Cost", yaxis="y2"
+        mode="lines+markers", name="Monthly Cost",
+        yaxis="y2"
     ))
-    fig1.update_layout(
-        title="Monthly Claim Volume & Total Cost",
+    fig_trend.update_layout(
+        title="Monthly Claim Volume & Total Cost (with 3-month Forecast)",
         xaxis_title="Month",
-        yaxis=dict(title="Volume"),
-        yaxis2=dict(title="Cost (USD)", overlaying="y", side="right"),
+        yaxis=dict(title="Claims Volume"),
+        yaxis2=dict(title="Total Cost (USD)", overlaying="y", side="right"),
         legend=dict(x=0.01, y=0.99)
     )
-    st.plotly_chart(fig1, use_container_width=True)
+    st.plotly_chart(fig_trend, use_container_width=True)
 
-    # --- Claim Cost Distribution with Raw/Log Toggle ---
+    # Claim cost distribution with Raw vs Log scale toggle
     st.subheader("Claim Cost Distribution")
     scale = st.radio("Cost Scale", ["Raw", "Log"], horizontal=True)
     if scale == "Log":
@@ -163,85 +198,134 @@ with tab_dashboard:
     else:
         df["cost_plot"] = df["claim_cost"]
         x_label = "Claim Cost (USD)"
-
     fig_cost_dist = px.histogram(
-        df,
-        x="cost_plot",
-        nbins=50,
+        df, x="cost_plot", nbins=50,
         title=f"{scale} Claim Cost Distribution",
         labels={"cost_plot": x_label, "count": "Frequency"}
     )
     st.plotly_chart(fig_cost_dist, use_container_width=True)
     st.markdown(
-        f"This shows the {scale.lower()} distribution of claim cost. "
-        + ("Log transform reveals the bulk of data when skew is high." 
-           if scale == "Log" else "Raw view highlights skew and outliers.")
+        f"This histogram shows the **{scale.lower()}** distribution of claim costs. "
+        + ("Using a log scale reveals the bulk of claims more clearly when the cost data is highly skewed."
+           if scale == "Log" else 
+           "In raw scale, we can see the right-skew with a long tail of high-cost outliers.")
     )
 
-    # --- Boxplot by Provider Type ---
+    # Cost by provider type (box plot for distribution by provider category)
     st.subheader("Claim Cost by Provider Type")
     fig_cost_provider = px.box(
-        df,
-        x="provider_type",
-        y="claim_cost",
+        df, x="provider_type", y="claim_cost", points="all",
         title="Claim Cost by Provider Type",
-        points="all",
         labels={"provider_type": "Provider Type", "claim_cost": "Claim Cost (USD)"}
     )
-    # use inclusive quartile for more precise whiskers
-    fig_cost_provider.update_traces(quartilemethod="inclusive")
+    fig_cost_provider.update_traces(quartilemethod="inclusive")  # use inclusive quartile for whiskers
     st.plotly_chart(fig_cost_provider, use_container_width=True)
     st.markdown(
-        "This box plot compares median, IQR, and outliers by provider; hospitals typically show higher costs."
+        "This box plot compares claim cost distributions across provider types. We see differences in median costs and variability – for example, hospital claims tend to have a higher median cost and more outliers than clinic or physician claims."
     )
 
-    # --- Correlation Heatmap with Reversed Palette ---
-    st.subheader("Feature Correlation Heatmap")
-    num_cols = ['age', 'chronic_condition_count', 'num_visits', 'num_er_visits', 'num_inpatient_stays', 'claim_cost']
-    corr = df[num_cols].corr()
-    fig_heat = px.imshow(
-        corr,
-        text_auto=True,
-        aspect="auto",
-        title="Correlation Heatmap (RdBu_r Palette)",
-        color_continuous_scale="RdBu_r",
-        zmin=-1, zmax=1
+    # Geographic distribution of claims
+    st.subheader("Geographic Distribution of Claims")
+    metric_choice = st.radio("Metric", ["Total Cost", "Number of Claims"], horizontal=True)
+    # Aggregate by state for the selected metric
+    state_agg = df.groupby("state").agg(
+        claim_count=("claim_cost", "size"),
+        total_cost=("claim_cost", "sum")
+    ).reset_index()
+    if metric_choice == "Total Cost":
+        color_col = "total_cost"
+        map_title = "Total Claim Cost by State"
+        color_label = "Total Cost (USD)"
+    else:
+        color_col = "claim_count"
+        map_title = "Number of Claims by State"
+        color_label = "Claim Count"
+    fig_map = px.choropleth(
+        state_agg, locations="state", locationmode="USA-states",
+        color=color_col, color_continuous_scale="Blues", scope="usa",
+        title=map_title, labels={color_col: color_label}
     )
-    st.plotly_chart(fig_heat, use_container_width=True)
+    st.plotly_chart(fig_map, use_container_width=True)
+    # Highlight insight from geographic distribution
+    if not state_agg.empty:
+        top_state_row = state_agg.sort_values(color_col, ascending=False).iloc[0]
+        top_state = top_state_row["state"]
+        st.markdown(
+            f"The **{top_state}** region has the highest {metric_choice.lower()} in our dataset. "
+            f"This geographic pattern can help prioritize regional strategies – for instance, focusing resources where claims volume or cost is highest."
+        )
+
+    # High-cost members analysis (top 10 members by total cost)
+    st.subheader("High-Cost Members")
+    member_cost = df.groupby("member_id", as_index=False)["claim_cost"].sum().rename(columns={"claim_cost": "total_cost"})
+    top_members = member_cost.nlargest(10, "total_cost")
+    # Convert member_id to a string label for plotting
+    top_members["member_id"] = top_members["member_id"].apply(lambda x: f"Member {int(x)}")
+    fig_top_members = px.bar(
+        top_members, x="total_cost", y="member_id", orientation="h",
+        title="Top 10 Members by Total Claim Cost",
+        labels={"total_cost": "Total Claim Cost (USD)", "member_id": "Member ID"}
+    )
+    fig_top_members.update_layout(yaxis={"categoryorder": "total ascending"})
+    st.plotly_chart(fig_top_members, use_container_width=True)
+    # Provide business insight for high-cost members
+    total_cost_sum = float(df["claim_cost"].sum(skipna=True))
+    top10_cost_sum = float(top_members["total_cost"].sum(skipna=True))
+    perc_contrib = (top10_cost_sum / total_cost_sum * 100) if total_cost_sum > 0 else 0
     st.markdown(
-        "Note strong links between inpatient stays and claim cost."
+        f"Typically, a small number of patients drive a large share of healthcare costs. "
+        f"In this dataset, the top 10 members (by total cost) account for about **{perc_contrib:.1f}%** of the total claim expenditure. "
+        f"*(In real insurance portfolios, the top 5% of members often drive ~50% of costs.)* "
+        f"Targeted care management for these high-cost individuals could significantly reduce overall expenses."
     )
 
+    # Correlation heatmap for numeric features
+    st.subheader("Feature Correlation Heatmap")
+    # Define numeric columns to include in correlation
+    num_cols = ["age", "chronic_condition_count", "num_visits", "num_er_visits", "num_inpatient_stays", "claim_cost"]
+    # Some columns might not exist in the filtered data (e.g., if not present in synthetic fallback)
+    num_cols = [col for col in num_cols if col in df.columns]
+    if num_cols:
+        corr_matrix = df[num_cols].corr()
+        fig_heat = px.imshow(
+            corr_matrix, text_auto=True, aspect="auto",
+            title="Correlation Heatmap (Numeric Features)",
+            color_continuous_scale="RdBu_r", zmin=-1, zmax=1
+        )
+        st.plotly_chart(fig_heat, use_container_width=True)
+        st.markdown(
+            "Correlation highlights relationships between features. For example, we observe that variables related to service utilization (e.g., inpatient stays, ER visits) are positively correlated with higher claim costs."
+        )
+    else:
+        st.write("Not enough numeric data available to compute correlations.")
 
-# Missing Data Tab
 with tab_missing:
     st.header("Missing Data Analysis")
-
-    miss_before = df.isna().sum()
-    miss_before = miss_before[miss_before > 0]
-    if miss_before.empty:
-        st.success("No missing values detected.")
+    # Calculate missing values before any imputation
+    missing_counts = df.isna().sum()
+    missing_counts = missing_counts[missing_counts > 0]
+    if missing_counts.empty:
+        st.success("No missing values detected in the current filtered dataset.")
     else:
-        mb = miss_before.reset_index()
-        mb.columns = ["Feature", "Missing Count"]
-        fig5 = px.bar(mb, x="Feature", y="Missing Count",
-                      title="Missing Values Before Imputation")
-        st.plotly_chart(fig5, use_container_width=True)
+        missing_df = missing_counts.reset_index()
+        missing_df.columns = ["Feature", "Missing Count"]
+        fig_missing = px.bar(missing_df, x="Feature", y="Missing Count", title="Missing Values by Feature")
+        st.plotly_chart(fig_missing, use_container_width=True)
 
         st.markdown("### Imputation of Missing Values")
-        df_imp = df.copy()
-        for col in df_imp.select_dtypes(include=[np.number]).columns:
-            df_imp[col].fillna(df_imp[col].median(), inplace=True)
-        for col in df_imp.select_dtypes(include=["object", "category"]).columns:
-            df_imp[col].fillna(df_imp[col].mode()[0], inplace=True)
+        # Simple imputation: median for numeric, mode for categorical
+        df_imputed = df.copy()
+        for col in df_imputed.select_dtypes(include=[np.number]).columns:
+            df_imputed[col].fillna(df_imputed[col].median(), inplace=True)
+        for col in df_imputed.select_dtypes(include=["object", "category"]).columns:
+            df_imputed[col].fillna(df_imputed[col].mode()[0] if df_imputed[col].mode().size > 0 else "Unknown", inplace=True)
 
-        miss_after = df_imp.isna().sum()
-        miss_after = miss_after[miss_after > 0]
-        if miss_after.empty:
-            st.success("All missing values have been imputed.")
+        missing_after = df_imputed.isna().sum()
+        missing_after = missing_after[missing_after > 0]
+        if missing_after.empty:
+            st.success("All missing values have been imputed (filled) using simple strategies.")
         else:
-            ma = miss_after.reset_index()
-            ma.columns = ["Feature", "Missing Count"]
-            fig6 = px.bar(ma, x="Feature", y="Missing Count",
-                          title="Missing Values After Imputation")
-            st.plotly_chart(fig6, use_container_width=True)
+            missing_after_df = missing_after.reset_index()
+            missing_after_df.columns = ["Feature", "Missing Count"]
+            fig_missing_after = px.bar(missing_after_df, x="Feature", y="Missing Count", title="Missing Values After Imputation")
+            st.plotly_chart(fig_missing_after, use_container_width=True)
