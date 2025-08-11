@@ -5,6 +5,7 @@ on:
     - cron: '0 0 * * *'   # daily at 00:00 UTC
   workflow_dispatch:
 
+# allow this workflow to push commits
 permissions:
   contents: write
 
@@ -22,18 +23,20 @@ jobs:
           persist-credentials: true
           fetch-depth: 0
 
-      - name: Install Databricks CLI
+      # Install Databricks CLI (pick ONE of these two and keep it)
+      - name: Install Databricks CLI (pinned)
         uses: databricks/setup-cli@v0.263.0
+      # - name: Install Databricks CLI (track latest)
+      #   uses: databricks/setup-cli@main
 
       - name: Show CLI version
         run: databricks -v
 
       - name: Ensure Databricks repo exists (create if missing)
-        shell: bash
         run: |
-          set -euo pipefail
+          set -e
           REPO_PATH="/Workspace/Repos/tpjcw0309@gmail.com/claims-ml-pipeline"
-          REPO_URL="https://github.com/hfepbook1/claims-ml-pipeline.git"
+          REPO_URL="https://github.com/hfepbook1/claims-ml-pipeline.git"  # <- update this
 
           if databricks repos get "$REPO_PATH" >/dev/null 2>&1; then
             echo "Repo exists at $REPO_PATH"
@@ -43,91 +46,18 @@ jobs:
           fi
 
       - name: Pull latest GitHub into Databricks Repos
-        shell: bash
         run: |
-          set -euo pipefail
-          # Use your actual default branch; change master->main if needed
           databricks repos update "/Workspace/Repos/tpjcw0309@gmail.com/claims-ml-pipeline" --branch master
+        # You can also use a different branch here if needed.
 
-      # -------- THE IMPORTANT PART: selective export (code-only) --------
-      - name: Export code-only items from Databricks Workspace
-        shell: bash
+      - name: Export Databricks workspace dir to local
         run: |
-          set -euo pipefail
-
-          REPO_PATH="/Workspace/Repos/tpjcw0309@gmail.com/claims-ml-pipeline"
-          DEST="."
-
-          # Directories to exclude from export (regex)
-          EXCLUDE_DIR_REGEX='/(.git|.vs|__pycache__|.ipynb_checkpoints|data|datasets|artifacts|mlruns|models)(/|$)'
-
-          # Allow-list of file extensions to export (case-insensitive)
-          # Add or remove types as you like
-          ALLOW_EXT_REGEX='(?i)\.(py|ipynb|sql|scala|r|md|txt|json|yaml|yml|toml|sh)$'
-
-          # Try JSON listing; fallback to plain recursive listing if needed
-          echo "Listing workspace items under $REPO_PATH ..."
-          if databricks workspace list --absolute --recursive --output JSON "$REPO_PATH" > .ws_list.json 2>/dev/null; then
-            echo "JSON listing available"
-            # jq to filter only FILE/NOTEBOOK objects that match allow-list and exclude dirs
-            sudo apt-get update -y >/dev/null 2>&1 || true
-            sudo apt-get install -y jq >/dev/null 2>&1
-            jq -r '.objects[] | select(.object_type != "DIRECTORY") | .path' .ws_list.json > .ws_paths.txt
-          else
-            echo "JSON listing not available, using plain listing"
-            databricks workspace ls -r "$REPO_PATH" | sed 's/\r$//' > .ws_paths.txt
-          fi
-
-          # Iterate and export only allowed files
-          while IFS= read -r p; do
-            p="${p%$'\r'}"
-            # Skip empty
-            [[ -z "$p" ]] && continue
-
-            # Exclude heavy/binary directories
-            if [[ "$p" =~ $EXCLUDE_DIR_REGEX ]]; then
-              echo "Skip excluded dir/file: $p"
-              continue
-            fi
-
-            # Export only allowed extensions
-            if [[ "$p" =~ $ALLOW_EXT_REGEX ]]; then
-              rel="${p#${REPO_PATH}/}"
-              mkdir -p "$(dirname "$rel")"
-              echo "Exporting $p -> $rel"
-              # Use SOURCE format to get notebook source when applicable
-              if ! databricks workspace export "$p" "$rel" --overwrite --format SOURCE; then
-                echo "WARN: failed to export $p, skipping"
-              fi
-            else
-              echo "Skip non-code or unsupported type: $p"
-            fi
-          done < .ws_paths.txt
+          # NOTE: include destination '.' and --overwrite
+          databricks workspace export-dir "/Workspace/Repos/tpjcw0309@gmail.com/claims-ml-pipeline" . --overwrite
 
       - name: Commit and push changes back to GitHub
-        shell: bash
         run: |
-          set -euo pipefail
           git config user.name "databricks-bot"
           git config user.email "tpjcw0309@gmail.com"
           if [[ -n "$(git status --porcelain)" ]]; then
             echo "Changes detected. Committing and pushing..."
-            git add -A
-            git commit -m "🔄 Daily sync from Databricks ($(date -u +'%Y-%m-%d %H:%M UTC'))"
-            git push
-          else
-            echo "No changes to commit. Repository is already up-to-date."
-          fi
-
-      - name: Notify on Failure
-        if: ${{ failure() }}
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-        run: |
-          echo "Sync failed! Sending notification..."
-          payload='{"text": ":x: **Databricks Sync Failed** – Check GitHub Actions logs for details."}'
-          if [[ -n "${SLACK_WEBHOOK_URL:-}" ]]; then
-            curl -X POST -H 'Content-type: application/json' --data "$payload" "$SLACK_WEBHOOK_URL"
-          else
-            echo "No Slack webhook configured."
-          fi
