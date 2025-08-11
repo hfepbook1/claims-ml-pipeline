@@ -1,49 +1,64 @@
-name: Databricks Sync  # Name of the workflow
+name: Databricks Sync
 
-# Run on a schedule (daily at midnight UTC) and on manual trigger
 on:
   schedule:
-    - cron: '0 0 * * *'   # Every day at 00:00 UTC:contentReference[oaicite:13]{index=13}
-  workflow_dispatch:      # Allow manual trigger from GitHub UI
+    - cron: '0 0 * * *'   # daily at 00:00 UTC
+  workflow_dispatch:
 
-# Workflow jobs and permissions
+# allow this workflow to push commits
+permissions:
+  contents: write
+
 jobs:
   sync:
     runs-on: ubuntu-latest
-    # Pass Databricks credentials to the job from secrets
     env:
       DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
       DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+
     steps:
-      # Step 1: Check out the repository code
-      - name: Checkout Repo
-        uses: actions/checkout@v3
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+          fetch-depth: 0
 
-      # Step 2: Set up Databricks CLI
-      - name: Install Databricks CLI
-        # Use official Databricks GitHub Action to install CLI and dependencies
-        uses: databricks/setup-cli@v1
+      # Install Databricks CLI (pick ONE of these two and keep it)
+      - name: Install Databricks CLI (pinned)
+        uses: databricks/setup-cli@v0.263.0
+      # - name: Install Databricks CLI (track latest)
+      #   uses: databricks/setup-cli@main
 
-      # Step 3: Update Databricks repo to match latest GitHub (pull GH changes into Databricks)
-      - name: Sync GitHub changes to Databricks
+      - name: Show CLI version
+        run: databricks -v
+
+      - name: Ensure Databricks repo exists (create if missing)
         run: |
-          # Ensure Databricks repo is on latest GitHub commit
-          # (This pulls the specified branch from GitHub into the Databricks workspace repo)
-          databricks repos update "/Workspace/Repos/tpjcw0309@gmail.com/claims-ml-pipeline" --branch main
+          set -e
+          REPO_PATH="/Repos/tpjcw0309@gmail.com/claims-ml-pipeline"
+          REPO_URL="https://github.com/<OWNER>/<REPO>.git"  # <- update this
 
-      # Step 4: Export Databricks workspace dir to local runner
-      - name: Export Databricks workspace to local
+          if databricks repos get "$REPO_PATH" >/dev/null 2>&1; then
+            echo "Repo exists at $REPO_PATH"
+          else
+            echo "Creating repo at $REPO_PATH"
+            databricks repos create "$REPO_URL" gitHub --path "$REPO_PATH"
+          fi
+
+      - name: Pull latest GitHub into Databricks Repos
         run: |
-          # Export the entire repository directory from Databricks workspace to the current directory
-          # (Overwrite local files with any changes from Databricks)
-          databricks workspace export-dir "/Workspace/Repos/tpjcw0309@gmail.com/claims-ml-pipeline" --overwrite
+          databricks repos update "/Repos/tpjcw0309@gmail.com/claims-ml-pipeline" --branch main
+        # You can also use a different branch here if needed.
 
-      # Step 5: Commit and push changes back to GitHub
-      - name: Commit and Push to GitHub
+      - name: Export Databricks workspace dir to local
+        run: |
+          # NOTE: include destination '.' and --overwrite
+          databricks workspace export-dir "/Repos/tpjcw0309@gmail.com/claims-ml-pipeline" . --overwrite
+
+      - name: Commit and push changes back to GitHub
         run: |
           git config user.name "databricks-bot"
           git config user.email "tpjcw0309@gmail.com"
-          # Check for any changes (added, modified, removed files)
           if [[ -n "$(git status --porcelain)" ]]; then
             echo "Changes detected. Committing and pushing..."
             git add -A
@@ -53,14 +68,10 @@ jobs:
             echo "No changes to commit. Repository is already up-to-date."
           fi
 
-      # Step 6: Notify on failure (e.g., via Slack)
-      - name: Notify on Failure
+      - name: Notify on failure (Slack)
         if: ${{ failure() }}
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: |
-          echo "Sync failed! Sending notification..."
-          # Post a message to Slack (ensure SLACK_WEBHOOK_URL is added in repo secrets)
-          payload='{"text": ":x: **Databricks Sync Failed** – Please check the GitHub Actions logs for details."}'
+          payload='{"text": ":x: Databricks Sync Failed – check Actions logs."}'
           curl -X POST -H 'Content-type: application/json' --data "$payload" "$SLACK_WEBHOOK_URL"
-
