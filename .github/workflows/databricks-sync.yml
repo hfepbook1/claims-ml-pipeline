@@ -5,7 +5,6 @@ on:
     - cron: '0 0 * * *'   # daily at 00:00 UTC
   workflow_dispatch:
 
-# allow this workflow to push commits
 permissions:
   contents: write
 
@@ -15,6 +14,7 @@ jobs:
     env:
       DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
       DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+      REPO_WS: "/Workspace/Repos/tpjcw0309@gmail.com/claims-ml-pipeline"
 
     steps:
       - name: Checkout repo
@@ -23,11 +23,8 @@ jobs:
           persist-credentials: true
           fetch-depth: 0
 
-      # Install Databricks CLI (pick ONE of these two and keep it)
       - name: Install Databricks CLI (pinned)
         uses: databricks/setup-cli@v0.263.0
-      # - name: Install Databricks CLI (track latest)
-      #   uses: databricks/setup-cli@main
 
       - name: Show CLI version
         run: databricks -v
@@ -35,25 +32,53 @@ jobs:
       - name: Ensure Databricks repo exists (create if missing)
         run: |
           set -e
-          REPO_PATH="/Workspace/Repos/tpjcw0309@gmail.com/claims-ml-pipeline"
-          REPO_URL="https://github.com/hfepbook1/claims-ml-pipeline.git"  # <- update this
-
-          if databricks repos get "$REPO_PATH" >/dev/null 2>&1; then
-            echo "Repo exists at $REPO_PATH"
+          REPO_URL="https://github.com/hfepbook1/claims-ml-pipeline.git"
+          if databricks repos get "$REPO_WS" >/dev/null 2>&1; then
+            echo "Repo exists at $REPO_WS"
           else
-            echo "Creating repo at $REPO_PATH"
-            databricks repos create "$REPO_URL" gitHub --path "$REPO_PATH"
+            echo "Creating repo at $REPO_WS"
+            databricks repos create "$REPO_URL" gitHub --path "$REPO_WS"
           fi
 
       - name: Pull latest GitHub into Databricks Repos
         run: |
-          databricks repos update "/Workspace/Repos/tpjcw0309@gmail.com/claims-ml-pipeline" --branch master
-        # You can also use a different branch here if needed.
+          # Use the correct branch name here (main vs master)
+          databricks repos update "$REPO_WS" --branch main || \
+          databricks repos update "$REPO_WS" --branch master
 
-      - name: Export Databricks workspace dir to local
+      # OPTIONAL: If the workspace repo already contains heavy dirs, delete them
+      # so export won't hit the 10MB limit. Comment these out if you want to keep
+      # data/models INSIDE workspace (not recommended).
+      - name: Remove heavy paths in Workspace (pre-export cleanup)
         run: |
-          # NOTE: include destination '.' and --overwrite
-          databricks workspace export-dir "/Workspace/Repos/tpjcw0309@gmail.com/claims-ml-pipeline" . --overwrite
+          set -e
+          for p in "$REPO_WS/data" "$REPO_WS/models" "$REPO_WS/.vs"; do
+            databricks workspace delete "$p" --recursive || true
+          done
+
+      - name: Export allowlisted folders (skip data/models/.vs)
+        run: |
+          set -e
+          mkdir -p .github workflows frontend backend notebooks scripts
+          # Export these directories if they exist
+          for d in ".github" "frontend" "backend" "notebooks" "scripts"; do
+            databricks workspace export-dir "$REPO_WS/$d" "$d" --overwrite || echo "skip $d"
+          done
+          # Export top-level files we care about
+          for f in "README.md" "requirements.txt" "pyproject.toml" "setup.cfg" "Dockerfile" ".gitignore"; do
+            databricks workspace export "$REPO_WS/$f" "$f" --overwrite || true
+          done
+
+      - name: Enforce ignore of heavy artifacts (local cleanup)
+        run: |
+          set -e
+          # Make sure big/generated stuff never gets pushed
+          echo "" >> .gitignore
+          printf "\n# Large data & generated artifacts\ndata/\nmodels/\n.vs/\n.ipynb_checkpoints/\n" >> .gitignore
+          # Remove from index if previously tracked
+          git rm -r --cached data models ".vs" ".ipynb_checkpoints" 2>/dev/null || true
+          # Also delete local copies to avoid re-adding
+          rm -rf data models ".vs" ".ipynb_checkpoints" || true
 
       - name: Commit and push changes back to GitHub
         run: |
@@ -61,3 +86,9 @@ jobs:
           git config user.email "tpjcw0309@gmail.com"
           if [[ -n "$(git status --porcelain)" ]]; then
             echo "Changes detected. Committing and pushing..."
+            git add -A
+            git commit -m "🔄 Daily sync from Databricks ($(date -u +'%Y-%m-%d %H:%M UTC'))"
+            git push
+          else
+            echo "No changes to commit. Repository is already up-to-date."
+          fi
