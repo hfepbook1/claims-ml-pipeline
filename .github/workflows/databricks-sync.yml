@@ -53,7 +53,7 @@ jobs:
       - name: Export Databricks workspace dir to local
         run: |
           # NOTE: include destination '.' and --overwrite
-          databricks workspace export-dir "/Repos/tpjcw0309@gmail.com/claims-ml-pipeline" . --overwrite
+          databricks workspace export-dir "/Workspace/Repos/tpjcw0309@gmail.com/claims-ml-pipeline" . --overwrite
 
       - name: Commit and push changes back to GitHub
         run: |
@@ -67,11 +67,3 @@ jobs:
           else
             echo "No changes to commit. Repository is already up-to-date."
           fi
-
-      - name: Notify on failure (Slack)
-        if: ${{ failure() }}
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-        run: |
-          payload='{"text": ":x: Databricks Sync Failed – check Actions logs."}'
-          curl -X POST -H 'Content-type: application/json' --data "$payload" "$SLACK_WEBHOOK_URL"
