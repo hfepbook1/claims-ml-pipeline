@@ -39,6 +39,10 @@ def load_metrics_data():
 with st.spinner("Loading latest metrics from Databricks..."):
     df_metrics = load_metrics_data()
 
+st.subheader("🕵️ Data Inspector")
+st.write("Preview of model performance metrics returned from Databricks:")
+st.dataframe(df_metrics)
+
 if df_metrics.empty:
     st.error("No monitoring data available.")
     st.stop()
