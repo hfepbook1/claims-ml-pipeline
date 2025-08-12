@@ -5,6 +5,8 @@ data/**/*.csv
 models/*.pkl
 models/**/*.pkl
 
+.streamlit/
+
 # IDE & notebook noise
 .vs/
 .ipynb_checkpoints/
