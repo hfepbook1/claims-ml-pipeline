@@ -6,7 +6,7 @@ streamlit
 requests
 python-multipart
 plotly
-numpy<2.0
+numpy
 pandas
 scikit-learn
 imbalanced-learn
