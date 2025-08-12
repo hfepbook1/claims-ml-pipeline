@@ -26,18 +26,12 @@ def load_metrics_data():
             http_path=st.secrets["DATABRICKS_HTTP_PATH"],
             access_token=st.secrets["DATABRICKS_TOKEN"]
         )
-        # Create an SQLAlchemy engine from the DBAPI2 connection
         engine = create_engine("databricks://", creator=lambda: conn)
-        
-        # NOTE: The LIMIT clause is added for safety during debugging.
-        # For production, you may want to remove it or filter more specifically (e.g., a WHERE clause).
-        query = "SELECT * FROM workspace.claims_project.monitoring_metrics ORDER BY event_ts LIMIT 1000"
-        
+        query = "SELECT * FROM workspace.claims_project.monitoring_metrics ORDER BY event_ts"
         df = pd.read_sql(query, engine)
         df['event_ts'] = pd.to_datetime(df['event_ts'])
         return df
     finally:
-        # This ensures the connection is closed even if an error occurs
         if conn:
             conn.close()
 
@@ -45,26 +39,17 @@ def load_metrics_data():
 with st.spinner("Loading latest metrics from Databricks..."):
     df_metrics = load_metrics_data()
 
-# --- DEBUGGING SECTION ---
-# This section helps you find the correct column names from your Databricks table.
-st.subheader("🕵️ Data Inspector")
-st.write("The first 5 rows of data returned from Databricks:")
-st.dataframe(df_metrics.head())
-st.write("Discovered column names are:", df_metrics.columns.tolist())
-st.info("If the app shows a `KeyError`, check the column names above. You'll need to update the `columns='metric'` part of the pivot function below with the correct column name from the list.")
-# --- END DEBUGGING SECTION ---
-
 if df_metrics.empty:
     st.error("No monitoring data available.")
     st.stop()
 
-# Pivot the data so each metric is a column
-# !!! IMPORTANT: Check the column name 'metric' below and correct it if needed!
-df_wide = df_metrics.pivot(index='event_ts', columns='metric', values='value').sort_index()
+# --- MODIFICATION: Set event_ts as the index. The pivot is removed. ---
+df_wide = df_metrics.set_index('event_ts').sort_index()
 
-# Convert accuracy/precision/recall metrics from fraction to percentage
-for col in df_wide.columns:
-    if col in ["Fraud Acc", "Fraud Recall", "Readmit Acc", "Readmit Precision"]:
+# --- MODIFICATION: Updated column names to match your data ---
+# Convert accuracy metrics from fraction to percentage
+for col in ["accuracy_fraud_new", "accuracy_readmit_new"]:
+    if col in df_wide.columns:
         df_wide[col] = df_wide[col] * 100
 
 # Date range selection
@@ -82,9 +67,10 @@ if df_filtered.empty:
     st.warning("No data in the selected date range. Please adjust the range.")
     st.stop()
 
+# --- MODIFICATION: Updated column names to match your data ---
 # Calculate RMSE rolling mean and control bounds (±2σ) on full data
-if "RMSE" in df_wide.columns:
-    rmse_series = df_wide["RMSE"]
+if "rmse_cost_new" in df_wide.columns:
+    rmse_series = df_wide["rmse_cost_new"]
     rmse_mean = rmse_series.rolling(window=7).mean()
     rmse_std = rmse_series.rolling(window=7).std()
     upper_band = rmse_mean + 2 * rmse_std
@@ -93,30 +79,32 @@ else:
     upper_band = pd.Series(dtype=float)
     lower_band = pd.Series(dtype=float)
 
+# --- MODIFICATION: Updated column names to match your data ---
 # Anomaly detection alerts for latest metrics (full range)
 latest_date = df_wide.index.max()
-if "RMSE" in df_wide.columns:
-    latest_rmse = df_wide["RMSE"].loc[latest_date]
+if "rmse_cost_new" in df_wide.columns:
+    latest_rmse = df_wide["rmse_cost_new"].loc[latest_date]
     if latest_date in upper_band.index and pd.notnull(upper_band.loc[latest_date]) and latest_rmse > upper_band.loc[latest_date]:
         st.error(f"🚨 RMSE spike detected on {latest_date.date()}: RMSE={latest_rmse:.2f} (above normal range)")
-if "Fraud Acc" in df_wide.columns:
-    latest_fraud_acc = df_wide["Fraud Acc"].loc[latest_date]
+if "accuracy_fraud_new" in df_wide.columns:
+    latest_fraud_acc = df_wide["accuracy_fraud_new"].loc[latest_date]
     if latest_fraud_acc < 80:
         st.error(f"🚨 Fraud Model Accuracy dropped to {latest_fraud_acc:.1f}% on {latest_date.date()} (below 80%)")
-if "Readmit Acc" in df_wide.columns:
-    latest_readmit_acc = df_wide["Readmit Acc"].loc[latest_date]
+if "accuracy_readmit_new" in df_wide.columns:
+    latest_readmit_acc = df_wide["accuracy_readmit_new"].loc[latest_date]
     if latest_readmit_acc < 80:
         st.error(f"🚨 Readmission Model Accuracy dropped to {latest_readmit_acc:.1f}% on {latest_date.date()} (below 80%)")
 
 # Use the filtered data for plotting
 df_plot = df_filtered
 
+# --- MODIFICATION: Updated column names to match your data ---
 # Plot RMSE over time with control band
-if "RMSE" in df_plot.columns:
-    rmse_plot = df_plot["RMSE"]
-    # Slice the pre-computed control bands to the selected range
+if "rmse_cost_new" in df_plot.columns:
+    rmse_plot = df_plot["rmse_cost_new"]
     rmse_upper_plot = upper_band.reindex(df_plot.index)
     rmse_lower_plot = lower_band.reindex(df_plot.index)
+    
     fig_rmse = go.Figure()
     fig_rmse.add_trace(go.Scatter(x=rmse_plot.index, y=rmse_plot,
                                   mode='lines+markers', name='RMSE'))
@@ -135,30 +123,32 @@ if "RMSE" in df_plot.columns:
 else:
     st.info("RMSE metric not available in the data.")
 
-# Plot Fraud Detection model performance (Accuracy and Recall)
-if "Fraud Acc" in df_plot.columns:
+# --- MODIFICATION: Updated column names to match your data ---
+# Plot Fraud Detection model performance (Accuracy and F1-Score)
+if "accuracy_fraud_new" in df_plot.columns:
     fig_fraud = go.Figure()
-    fig_fraud.add_trace(go.Scatter(x=df_plot.index, y=df_plot["Fraud Acc"],
+    fig_fraud.add_trace(go.Scatter(x=df_plot.index, y=df_plot["accuracy_fraud_new"],
                                    mode='lines+markers', name='Accuracy'))
-    if "Fraud Recall" in df_plot.columns:
-        fig_fraud.add_trace(go.Scatter(x=df_plot.index, y=df_plot["Fraud Recall"],
-                                       mode='lines+markers', name='Recall'))
-    fig_fraud.update_layout(title="Fraud Detection Model - Accuracy/Recall Over Time",
-                            xaxis_title="Date", yaxis_title="Performance (%)")
+    if "f1_fraud_new" in df_plot.columns:
+        fig_fraud.add_trace(go.Scatter(x=df_plot.index, y=df_plot["f1_fraud_new"],
+                                       mode='lines+markers', name='F1-Score'))
+    fig_fraud.update_layout(title="Fraud Detection Model - Performance Over Time",
+                            xaxis_title="Date", yaxis_title="Performance")
     st.plotly_chart(fig_fraud, use_container_width=True)
 else:
     st.info("Fraud Detection metrics not available.")
 
-# Plot Readmission Prediction model performance (Accuracy and Precision)
-if "Readmit Acc" in df_plot.columns:
+# --- MODIFICATION: Updated column names to match your data ---
+# Plot Readmission Prediction model performance (Accuracy and F1-Score)
+if "accuracy_readmit_new" in df_plot.columns:
     fig_readmit = go.Figure()
-    fig_readmit.add_trace(go.Scatter(x=df_plot.index, y=df_plot["Readmit Acc"],
+    fig_readmit.add_trace(go.Scatter(x=df_plot.index, y=df_plot["accuracy_readmit_new"],
                                      mode='lines+markers', name='Accuracy'))
-    if "Readmit Precision" in df_plot.columns:
-        fig_readmit.add_trace(go.Scatter(x=df_plot.index, y=df_plot["Readmit Precision"],
-                                         mode='lines+markers', name='Precision'))
-    fig_readmit.update_layout(title="Readmission Prediction Model - Accuracy/Precision Over Time",
-                              xaxis_title="Date", yaxis_title="Performance (%)")
+    if "f1_readmit_new" in df_plot.columns:
+        fig_readmit.add_trace(go.Scatter(x=df_plot.index, y=df_plot["f1_readmit_new"],
+                                         mode='lines+markers', name='F1-Score'))
+    fig_readmit.update_layout(title="Readmission Prediction Model - Performance Over Time",
+                              xaxis_title="Date", yaxis_title="Performance")
     st.plotly_chart(fig_readmit, use_container_width=True)
 else:
     st.info("Readmission Prediction metrics not available.")
