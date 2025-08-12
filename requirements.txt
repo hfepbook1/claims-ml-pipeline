@@ -15,6 +15,7 @@ mlflow
 scipy
 joblib
 threadpoolctl
+databricks-sql-connector
 google-api-python-client==2.178.0  # Google API client for Gmail API (latest stable)
 google-auth==2.40.3      # Google authentication library for credentials
 google-auth-httplib2==0.2.0  # Google auth transport for httplib2 requests
