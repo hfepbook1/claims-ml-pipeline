@@ -1,5 +1,6 @@
 import pandas as pd
 from databricks import sql
+from sqlalchemy import create_engine
 import streamlit as st
 import plotly.graph_objects as go
 
@@ -14,26 +15,51 @@ st.markdown("This page provides real-time performance tracking for all models. "
 # Data loading function (with caching) to fetch metrics from Databricks
 @st.cache_data(ttl=24*3600, show_spinner=False)
 def load_metrics_data():
-    conn = sql.connect(
-        server_hostname = st.secrets["DATABRICKS_HOST"],
-        http_path       = st.secrets["DATABRICKS_HTTP_PATH"],
-        access_token    = st.secrets["DATABRICKS_TOKEN"]
-    )
-    query = "SELECT * FROM workspace.claims_project.monitoring_metrics ORDER BY event_ts"
-    df = pd.read_sql(query, conn)
-    conn.close()
-    df['event_ts'] = pd.to_datetime(df['event_ts'])
-    return df
+    """
+    Connects to Databricks, fetches model monitoring metrics,
+    and returns them in a pandas DataFrame.
+    """
+    conn = None  # Initialize conn to None
+    try:
+        conn = sql.connect(
+            server_hostname=st.secrets["DATABRICKS_HOST"],
+            http_path=st.secrets["DATABRICKS_HTTP_PATH"],
+            access_token=st.secrets["DATABRICKS_TOKEN"]
+        )
+        # Create an SQLAlchemy engine from the DBAPI2 connection
+        engine = create_engine("databricks://", creator=lambda: conn)
+        
+        # NOTE: The LIMIT clause is added for safety during debugging.
+        # For production, you may want to remove it or filter more specifically (e.g., a WHERE clause).
+        query = "SELECT * FROM workspace.claims_project.monitoring_metrics ORDER BY event_ts LIMIT 1000"
+        
+        df = pd.read_sql(query, engine)
+        df['event_ts'] = pd.to_datetime(df['event_ts'])
+        return df
+    finally:
+        # This ensures the connection is closed even if an error occurs
+        if conn:
+            conn.close()
 
 # Load data with a loading spinner
 with st.spinner("Loading latest metrics from Databricks..."):
     df_metrics = load_metrics_data()
+
+# --- DEBUGGING SECTION ---
+# This section helps you find the correct column names from your Databricks table.
+st.subheader("🕵️ Data Inspector")
+st.write("The first 5 rows of data returned from Databricks:")
+st.dataframe(df_metrics.head())
+st.write("Discovered column names are:", df_metrics.columns.tolist())
+st.info("If the app shows a `KeyError`, check the column names above. You'll need to update the `columns='metric'` part of the pivot function below with the correct column name from the list.")
+# --- END DEBUGGING SECTION ---
 
 if df_metrics.empty:
     st.error("No monitoring data available.")
     st.stop()
 
 # Pivot the data so each metric is a column
+# !!! IMPORTANT: Check the column name 'metric' below and correct it if needed!
 df_wide = df_metrics.pivot(index='event_ts', columns='metric', values='value').sort_index()
 
 # Convert accuracy/precision/recall metrics from fraction to percentage
@@ -44,12 +70,12 @@ for col in df_wide.columns:
 # Date range selection
 min_date = df_wide.index.min().to_pydatetime()
 max_date = df_wide.index.max().to_pydatetime()
-date_range = st.slider("Select Date Range", 
-                       min_value=min_date, max_value=max_date, 
+date_range = st.slider("Select Date Range",
+                       min_value=min_date, max_value=max_date,
                        value=(min_date, max_date))
 start_date, end_date = date_range[0], date_range[1]
 # Filter data to the selected date range
-df_filtered = df_wide.loc[(df_wide.index >= pd.to_datetime(start_date)) & 
+df_filtered = df_wide.loc[(df_wide.index >= pd.to_datetime(start_date)) &
                           (df_wide.index <= pd.to_datetime(end_date))]
 
 if df_filtered.empty:
@@ -92,15 +118,15 @@ if "RMSE" in df_plot.columns:
     rmse_upper_plot = upper_band.reindex(df_plot.index)
     rmse_lower_plot = lower_band.reindex(df_plot.index)
     fig_rmse = go.Figure()
-    fig_rmse.add_trace(go.Scatter(x=rmse_plot.index, y=rmse_plot, 
+    fig_rmse.add_trace(go.Scatter(x=rmse_plot.index, y=rmse_plot,
                                   mode='lines+markers', name='RMSE'))
     if not rmse_upper_plot.isnull().all():
-        fig_rmse.add_trace(go.Scatter(x=rmse_plot.index, y=rmse_upper_plot, 
-                                      line=dict(color='rgba(255,255,255,0)'), 
+        fig_rmse.add_trace(go.Scatter(x=rmse_plot.index, y=rmse_upper_plot,
+                                      line=dict(color='rgba(255,255,255,0)'),
                                       showlegend=False, name='Upper Control'))
-        fig_rmse.add_trace(go.Scatter(x=rmse_plot.index, y=rmse_lower_plot, 
-                                      fill='tonexty', fillcolor='rgba(255,0,0,0.1)', 
-                                      line=dict(color='rgba(255,255,255,0)'), 
+        fig_rmse.add_trace(go.Scatter(x=rmse_plot.index, y=rmse_lower_plot,
+                                      fill='tonexty', fillcolor='rgba(255,0,0,0.1)',
+                                      line=dict(color='rgba(255,255,255,0)'),
                                       showlegend=False, name='Lower Control'))
     fig_rmse.update_layout(title="Claims Cost Model - RMSE Over Time",
                            xaxis_title="Date", yaxis_title="RMSE")
@@ -112,10 +138,10 @@ else:
 # Plot Fraud Detection model performance (Accuracy and Recall)
 if "Fraud Acc" in df_plot.columns:
     fig_fraud = go.Figure()
-    fig_fraud.add_trace(go.Scatter(x=df_plot.index, y=df_plot["Fraud Acc"], 
+    fig_fraud.add_trace(go.Scatter(x=df_plot.index, y=df_plot["Fraud Acc"],
                                    mode='lines+markers', name='Accuracy'))
     if "Fraud Recall" in df_plot.columns:
-        fig_fraud.add_trace(go.Scatter(x=df_plot.index, y=df_plot["Fraud Recall"], 
+        fig_fraud.add_trace(go.Scatter(x=df_plot.index, y=df_plot["Fraud Recall"],
                                        mode='lines+markers', name='Recall'))
     fig_fraud.update_layout(title="Fraud Detection Model - Accuracy/Recall Over Time",
                             xaxis_title="Date", yaxis_title="Performance (%)")
@@ -126,10 +152,10 @@ else:
 # Plot Readmission Prediction model performance (Accuracy and Precision)
 if "Readmit Acc" in df_plot.columns:
     fig_readmit = go.Figure()
-    fig_readmit.add_trace(go.Scatter(x=df_plot.index, y=df_plot["Readmit Acc"], 
+    fig_readmit.add_trace(go.Scatter(x=df_plot.index, y=df_plot["Readmit Acc"],
                                      mode='lines+markers', name='Accuracy'))
     if "Readmit Precision" in df_plot.columns:
-        fig_readmit.add_trace(go.Scatter(x=df_plot.index, y=df_plot["Readmit Precision"], 
+        fig_readmit.add_trace(go.Scatter(x=df_plot.index, y=df_plot["Readmit Precision"],
                                          mode='lines+markers', name='Precision'))
     fig_readmit.update_layout(title="Readmission Prediction Model - Accuracy/Precision Over Time",
                               xaxis_title="Date", yaxis_title="Performance (%)")
