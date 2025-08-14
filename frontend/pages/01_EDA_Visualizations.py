@@ -46,6 +46,14 @@ def load_data():
         "readmit_30d": np.random.choice([0, 1], size=n, p=[0.92, 0.08]),
         "num_inpatient_stays": np.random.poisson(0.5, size=n),
         "num_er_visits": np.random.poisson(1, size=n),
+        "num_visits": np.random.poisson(3, size=n),
+        "num_medications_used": np.random.poisson(5, size=n),
+        "num_procedures_performed": np.random.poisson(2, size=n),
+        "num_diagnostic_procedures": np.random.poisson(1, size=n),
+        "num_lab_tests": np.random.poisson(3, size=n),
+        "num_imaging_scans": np.random.poisson(2, size=n),
+        "num_emergency_visits": np.random.poisson(1, size=n),
+        "num_outpatient_visits": np.random.poisson(2, size=n),
     })
     
     # Generate claim costs with significant differences by provider type
@@ -497,13 +505,17 @@ st.divider()
 # --- 10. Correlation Analysis ---
 st.header("Correlation Analysis")
 st.markdown("""
-_This heatmap reveals the relationships between different numerical features. A value close to 1 indicates a strong positive correlation, 
+_This heatmap reveals the relationships between different numerical features. A value close to 1 indicates a strong positive correlation,
 while a value close to -1 indicates a strong negative correlation. A value near 0 suggests no correlation._
 """)
 
-# Select only numeric columns for the correlation matrix
+# --- UPDATED: Select specific numeric columns for a cleaner correlation matrix ---
 numeric_cols = df_filtered.select_dtypes(include=np.number).columns.tolist()
-corr_matrix = df_filtered[numeric_cols].corr()
+# Exclude identifiers, flags, and derived columns for a more focused analysis
+cols_to_exclude = ["provider_fraud", "is_fraud", "claim_amount_reimbursed", "member_id", "readmit_30d"]
+cols_for_corr = [col for col in numeric_cols if col not in cols_to_exclude]
+corr_matrix = df_filtered[cols_for_corr].corr()
+
 
 # Create the heatmap
 fig_corr = px.imshow(
@@ -511,9 +523,9 @@ fig_corr = px.imshow(
     text_auto=True,
     aspect="auto",
     color_continuous_scale='RdBu_r',
-    zmin=-1, 
+    zmin=-1,
     zmax=1,
-    title="Correlation Matrix of Numerical Features"
+    title="Correlation Matrix of Clinical and Cost Features"
 )
 
 fig_corr.update_layout(
@@ -523,11 +535,12 @@ fig_corr.update_layout(
 )
 st.plotly_chart(fig_corr, use_container_width=True)
 
+# --- UPDATED: Insights based on the revised correlation matrix ---
 st.markdown("""
 **Key Insights from the Heatmap:**
-* **`claim_cost`** and **`claim_amount_reimbursed`** have a perfect positive correlation, as expected since one is derived from the other.
-* Other features like **`num_inpatient_stays`** and **`chronic_condition_count`** show a mild positive correlation with `claim_cost`, which is logical in a healthcare context.
-* This analysis helps identify which factors are most strongly associated with higher or lower claim costs.
+* A notable positive correlation exists between **`chronic_condition_count`** and **`num_medications_used`**. This is clinically expected, as patients with more chronic illnesses typically require more medications for treatment.
+* Features related to healthcare utilization, such as **`num_inpatient_stays`**, **`num_er_visits`**, and **`num_visits`**, all show a mild positive correlation with **`claim_cost`**. This confirms that increased interaction with the healthcare system is associated with higher costs.
+* **`age`** also shows a slight positive correlation with cost and chronic conditions, reflecting the general trend of increasing healthcare needs with age.
 """)
 
 st.divider()
