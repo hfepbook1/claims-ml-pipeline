@@ -54,10 +54,10 @@ def load_data():
             df.loc[df.sample(frac=0.01, random_state=42).index, col] = np.nan
         
         region_to_states = {
-            "North":,
-            "South":,
-            "East":,
-            "West":
+            "North": ["California", "Oregon", "Washington", "Idaho", "Montana", "Wyoming", "North Dakota", "South Dakota", "Minnesota", "Wisconsin", "Michigan", "Illinois", "Indiana", "Ohio", "Pennsylvania", "New York", "New Jersey", "Connecticut", "Rhode Island", "Massachusetts", "Vermont", "New Hampshire", "Maine"],
+            "South": ["Texas", "Oklahoma", "Arkansas", "Louisiana", "Mississippi", "Alabama", "Georgia", "Florida", "South Carolina", "North Carolina", "Virginia", "West Virginia", "Kentucky", "Tennessee", "Arkansas", "Louisiana", "Mississippi", "Alabama", "Georgia", "Florida", "South Carolina", "North Carolina", "Virginia", "West Virginia", "Kentucky", "Tennessee"],
+            "East": ["New York", "New Jersey", "Connecticut", "Rhode Island", "Massachusetts", "Vermont", "New Hampshire", "Maine", "Pennsylvania", "New York", "New Jersey", "Connecticut", "Rhode Island", "Massachusetts", "Vermont", "New Hampshire", "Maine", "Pennsylvania", "New York", "New Jersey", "Connecticut", "Rhode Island", "Massachusetts", "Vermont", "New Hampshire", "Maine"],
+            "West": ["California", "Oregon", "Washington", "Idaho", "Montana", "Wyoming", "North Dakota", "South Dakota", "Minnesota", "Wisconsin", "Michigan", "Illinois", "Indiana", "Ohio", "Pennsylvania", "New York", "New Jersey", "Connecticut", "Rhode Island", "Massachusetts", "Vermont", "New Hampshire", "Maine", "Pennsylvania", "New York", "New Jersey", "Connecticut", "Rhode Island", "Massachusetts", "Vermont", "New Hampshire", "Maine"]
         }
         df["state"] = df["region"].apply(lambda r: np.random.choice(region_to_states.get(r, ["Unknown"])))
         unique_members = min(len(df), max(10, int(len(df) * 0.15)))
