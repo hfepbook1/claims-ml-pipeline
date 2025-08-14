@@ -3,285 +3,276 @@ from databricks import sql
 from sqlalchemy import create_engine
 import streamlit as st
 import plotly.graph_objects as go
-import plotly.express as px
-import plotly.figure_factory as ff
 
-# --- Page Configuration ---
-# Set the page to a wide layout with a professional title and icon.
+# ==============================================================================
+# 1. PAGE CONFIGURATION
+# ==============================================================================
 st.set_page_config(
-    page_title="Enterprise Model Monitoring Dashboard",
+    page_title="Model Monitoring Dashboard",
     page_icon="🤖",
-    layout="wide",
-    initial_sidebar_state="expanded"
+    layout="wide"
 )
 
-# --- Custom Styling (CSS) ---
-# Inject custom CSS for a more polished and professional look and feel.
-def load_css():
-    """Injects custom CSS to improve the dashboard's aesthetics."""
-    st.markdown("""
-        <style>
-        /* Main page background */
-       .stApp {
-            background-color: #f0f2f6;
-        }
-        /* Custom header gradient */
-        [data-testid="stHeader"] {
-            background-image: linear-gradient(90deg, #003366, #0055a4);
-        }
-        /* Style for metric cards */
-        [data-testid="stMetric"] {
-            background-color: #FFFFFF;
-            border: 1px solid #E0E0E0;
-            border-radius: 10px;
-            padding: 20px;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-        }
-        /* Style for tabs */
-       .stTabs [data-baseweb="tab-list"] {
-            gap: 24px;
-        }
-       .stTabs [data-baseweb="tab"] {
-            height: 50px;
-            white-space: pre-wrap;
-            background-color: #F0F2F6;
-            border-radius: 8px 8px 0px 0px;
-            gap: 1px;
-            padding-top: 10px;
-            padding-bottom: 10px;
-        }
-       .stTabs [aria-selected="true"] {
-            background-color: #FFFFFF;
-        }
-        </style>
-    """, unsafe_allow_html=True)
-
-# --- Data Loading and Caching ---
-# Use st.cache_data for efficient data loading, refreshing every 24 hours.
-@st.cache_data(ttl=24*3600, show_spinner="Fetching latest model metrics from Databricks...")
+# ==============================================================================
+# 2. DATA LOADING
+# ==============================================================================
+# This function connects to Databricks and fetches model performance metrics.
+# It's cached to prevent re-running on every interaction, refreshing every 24 hours.
+@st.cache_data(ttl=24*3600, show_spinner="Fetching latest data from Databricks...")
 def load_metrics_data():
     """
     Connects to Databricks, fetches model monitoring metrics,
-    and returns them in a pandas DataFrame. Caches the data to avoid
-    re-fetching on every interaction.
+    and returns them in a pandas DataFrame.
     """
     conn = None  # Initialize conn to None
     try:
-        # Securely connect using Streamlit secrets
         conn = sql.connect(
-            server_hostname=st.secrets,
-            http_path=st.secrets,
-            access_token=st.secrets
+            server_hostname=st.secrets["DATABRICKS_HOST"],
+            http_path=st.secrets["DATABRICKS_HTTP_PATH"],
+            access_token=st.secrets["DATABRICKS_TOKEN"]
         )
         engine = create_engine("databricks://", creator=lambda: conn)
-        # Optimized query to select only necessary columns
         query = "SELECT day, event_ts, rmse_cost, accuracy_fraud, accuracy_readmit FROM workspace.claims_project.monitoring_metrics ORDER BY day"
         df = pd.read_sql(query, engine)
         df['event_ts'] = pd.to_datetime(df['event_ts'])
         return df
-    except Exception as e:
-        st.error(f"Failed to connect to Databricks or load data: {e}")
-        return pd.DataFrame() # Return empty DataFrame on error
     finally:
         if conn:
             conn.close()
 
-# --- Plotting Functions ---
-def plot_rmse_analysis(df_filtered, df_full):
-    """Plots RMSE time series with control bands and its distribution."""
-    col1, col2 = st.columns([1, 2])
+# Load the data
+df_metrics = load_metrics_data()
 
-    with col1:
-        st.subheader("RMSE Trend with Control Bands")
-        # Calculate rolling stats on the full dataset for stable bands
-        rmse_series = df_full["rmse_cost"]
-        rmse_mean = rmse_series.rolling(window=7).mean()
-        rmse_std = rmse_series.rolling(window=7).std()
-        upper_band = rmse_mean + 2 * rmse_std
-        lower_band = rmse_mean - 2 * rmse_std
-
-        # Filter bands to the selected date range for plotting
-        rmse_plot = df_filtered["rmse_cost"]
-        upper_plot = upper_band.reindex(df_filtered.index)
-        lower_plot = lower_band.reindex(df_filtered.index)
-
-        # Identify anomalies
-        anomalies = rmse_plot[rmse_plot > upper_plot]
-
-        fig = go.Figure()
-        # Control bands (plotted first to be in the background)
-        fig.add_trace(go.Scatter(x=upper_plot.index, y=upper_plot, line=dict(color='rgba(0,0,0,0)'), showlegend=False, name='Upper Band'))
-        fig.add_trace(go.Scatter(x=lower_plot.index, y=lower_plot, fill='tonexty', fillcolor='rgba(255, 0, 0, 0.1)', line=dict(color='rgba(0,0,0,0)'), showlegend=False, name='Lower Band'))
-        # Main RMSE line
-        fig.add_trace(go.Scatter(x=rmse_plot.index, y=rmse_plot, mode='lines+markers', name='RMSE', line=dict(color='#003366')))
-        # Highlight anomalies
-        if not anomalies.empty:
-            fig.add_trace(go.Scatter(x=anomalies.index, y=anomalies, mode='markers', name='Anomaly', marker=dict(color='red', size=10, symbol='x')))
-
-        fig.update_layout(xaxis_title="Day", yaxis_title="RMSE", legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
-        st.plotly_chart(fig, use_container_width=True)
-        st.caption("The shaded red area indicates the expected RMSE range (±2σ) based on a 7-day rolling window. Points marked with 'X' are anomalies outside this range.")
-
-    with col2:
-        st.subheader("RMSE Distribution")
-        # Create distribution plot
-        if not df_filtered['rmse_cost'].empty:
-            hist_data = [df_filtered['rmse_cost'].dropna()]
-            group_labels = ['RMSE']
-            fig_dist = ff.create_distplot(hist_data, group_labels, show_hist=False, colors=['#0055a4'])
-            fig_dist.update_layout(xaxis_title="RMSE Value", yaxis_title="Density", showlegend=False)
-            st.plotly_chart(fig_dist, use_container_width=True)
-            st.caption("Distribution of RMSE values within the selected date range, showing the density (KDE) and individual data points (rug plot).")
-        else:
-            st.info("No RMSE data to display for distribution.")
-
-def plot_accuracy_analysis(df, metric_col, title, threshold):
-    """Plots accuracy time series with a threshold and its distribution."""
-    col1, col2 = st.columns([1, 2])
-
-    with col1:
-        st.subheader(f"{title} - Accuracy Trend")
-        accuracy_plot = df[metric_col]
-        anomalies = accuracy_plot[accuracy_plot < threshold]
-
-        fig = go.Figure()
-        # Threshold line
-        fig.add_hline(y=threshold, line_dash="dash", line_color="red", annotation_text=f"Threshold ({threshold}%)", annotation_position="bottom right")
-        # Main accuracy line
-        fig.add_trace(go.Scatter(x=accuracy_plot.index, y=accuracy_plot, mode='lines+markers', name='Accuracy', line=dict(color='#003366')))
-        # Highlight anomalies
-        if not anomalies.empty:
-            fig.add_trace(go.Scatter(x=anomalies.index, y=anomalies, mode='markers', name='Below Threshold', marker=dict(color='red', size=10, symbol='x')))
-
-        fig.update_layout(xaxis_title="Day", yaxis_title="Accuracy (%)", yaxis_range=[min(70, df[metric_col].min()-5), 101], legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
-        st.plotly_chart(fig, use_container_width=True)
-        st.caption(f"Accuracy trend over time. Points marked with 'X' have fallen below the {threshold}% performance threshold.")
-
-    with col2:
-        st.subheader("Accuracy Distribution")
-        # Create distribution plot
-        if not df[metric_col].empty:
-            hist_data = [df[metric_col].dropna()]
-            group_labels = ['Accuracy']
-            fig_dist = ff.create_distplot(hist_data, group_labels, show_hist=False, colors=['#0055a4'])
-            fig_dist.update_layout(xaxis_title="Accuracy (%)", yaxis_title="Density", showlegend=False)
-            st.plotly_chart(fig_dist, use_container_width=True)
-            st.caption("Distribution of accuracy values within the selected date range.")
-        else:
-            st.info("No accuracy data to display for distribution.")
-
-def plot_correlation_heatmap(df):
-    """Calculates and plots a correlation heatmap for the key metrics."""
-    st.subheader("Metric Correlation Heatmap")
-    corr_df = df[['rmse_cost', 'accuracy_fraud', 'accuracy_readmit']].corr()
-    # Create annotated heatmap
-    fig = px.imshow(
-        corr_df,
-        text_auto=True,
-        aspect="auto",
-        color_continuous_scale='Blues',
-        labels=dict(color="Correlation")
-    )
-    fig.update_layout(title_text='Correlation between Model Metrics', title_x=0.5)
-    st.plotly_chart(fig, use_container_width=True)
-    st.caption("This heatmap shows the correlation between the primary metrics of the three models. A value near 1 or -1 indicates a strong positive or negative correlation, respectively. A value near 0 indicates little to no correlation.")
-
-# --- Main Application ---
-def main():
-    """Main function to run the Streamlit app."""
-    load_css()
-
-    st.title("Enterprise Model Monitoring Dashboard")
+# ==============================================================================
+# 3. SIDEBAR AND FILTERS
+# ==============================================================================
+with st.sidebar:
+    st.title("🤖 Model Monitoring Dashboard")
     st.markdown("""
-    This dashboard provides real-time performance tracking for all deployed models.
-    Metrics are fetched daily from Databricks and visualized below.
-    Use the sidebar filter to zoom into specific time periods and explore each model's performance in its dedicated tab.
+    This page provides real-time performance tracking for all models. 
+    Metrics are fetched daily from Databricks.
     """)
-
-    df_metrics = load_metrics_data()
+    
+    st.header("Filters")
+    st.markdown("Use the slider to zoom into a specific period.")
 
     if df_metrics.empty:
-        st.error("No monitoring data could be loaded. Please check the Databricks connection or the source table.")
+        st.error("No monitoring data available to set filters.")
         st.stop()
 
-    # --- Data Pre-processing ---
+    # Prepare data for filtering
     df_by_day = df_metrics.set_index('day').sort_index()
-    for col in ["accuracy_fraud", "accuracy_readmit"]:
-        if col in df_by_day.columns:
-            df_by_day[col] = df_by_day[col] * 100
+    all_days = df_by_day.index.unique().tolist()
 
-    # --- Sidebar for Filters ---
-    with st.sidebar:
-        st.header("Filters")
-        all_days = df_by_day.index.unique().tolist()
-        if len(all_days) > 1:
-            day_range = st.select_slider(
-                "Select Day Range",
-                options=all_days,
-                value=(all_days, all_days[-1])
-            )
-            start_day, end_day = day_range
-        else:
-            start_day = end_day = all_days
+    # Day range selection slider
+    day_range = st.select_slider(
+        "Select Day Range",
+        options=all_days,
+        value=(all_days[0], all_days[-1])
+    )
+    start_day, end_day = day_range
 
-        df_filtered = df_by_day.loc[start_day:end_day]
+# ==============================================================================
+# 4. DATA PROCESSING AND ANALYSIS
+# ==============================================================================
+if df_metrics.empty:
+    st.error("No monitoring data available.")
+    st.stop()
 
-    if df_filtered.empty:
-        st.warning("No data available in the selected day range. Please adjust the filter.")
-        st.stop()
+# Convert accuracy to percentage
+for col in ["accuracy_fraud", "accuracy_readmit"]:
+    if col in df_by_day.columns:
+        df_by_day[col] = df_by_day[col] * 100
 
-    # --- Key Performance Indicators (KPIs) ---
-    st.header("Latest Day Performance Summary")
-    latest_day_data = df_by_day.loc[df_by_day.index.max()]
-    prev_day_data = df_by_day.loc[df_by_day.index.max() - 1] if len(df_by_day.index) > 1 else latest_day_data
+# Filter data based on sidebar selection
+df_filtered = df_by_day.loc[start_day:end_day]
 
-    kpi1, kpi2, kpi3 = st.columns(3)
-    with kpi1:
+if df_filtered.empty:
+    st.warning("No data in the selected day range. Please adjust the range.")
+    st.stop()
+
+# Calculate RMSE rolling mean and control bounds (±2σ) on the full dataset
+if "rmse_cost" in df_by_day.columns:
+    rmse_series = df_by_day["rmse_cost"]
+    rmse_mean = rmse_series.rolling(window=7).mean()
+    rmse_std = rmse_series.rolling(window=7).std()
+    upper_band = rmse_mean + 2 * rmse_std
+    lower_band = rmse_mean - 2 * rmse_std
+else:
+    upper_band = pd.Series(dtype=float)
+    lower_band = pd.Series(dtype=float)
+
+# ==============================================================================
+# 5. MAIN PAGE DISPLAY
+# ==============================================================================
+st.title("📈 Model Performance Overview")
+
+# --- ANOMALY ALERTS ---
+st.subheader("🚨 Latest Day Alerts")
+latest_day = df_by_day.index.max()
+previous_day = df_by_day.index.unique()[-2] if len(df_by_day.index.unique()) > 1 else latest_day
+
+# Create columns for alerts for a cleaner layout
+alert_cols = st.columns(3)
+with alert_cols[0]:
+    if "rmse_cost" in df_by_day.columns:
+        latest_rmse = df_by_day.loc[latest_day, "rmse_cost"]
+        if latest_day in upper_band.index and pd.notnull(upper_band.loc[latest_day]) and latest_rmse > upper_band.loc[latest_day]:
+            st.error(f"RMSE Spike: {latest_rmse:.2f}")
+
+with alert_cols[1]:
+    if "accuracy_fraud" in df_by_day.columns:
+        latest_fraud_acc = df_by_day.loc[latest_day, "accuracy_fraud"]
+        if latest_fraud_acc < 80:
+            st.error(f"Fraud Accuracy Drop: {latest_fraud_acc:.1f}%")
+
+with alert_cols[2]:
+    if "accuracy_readmit" in df_by_day.columns:
+        latest_readmit_acc = df_by_day.loc[latest_day, "accuracy_readmit"]
+        if latest_readmit_acc < 80:
+            st.error(f"Readmit Accuracy Drop: {latest_readmit_acc:.1f}%")
+
+st.markdown("---")
+
+# --- KPI METRICS ---
+st.subheader("📊 Key Performance Indicators (Latest Day)")
+kpi_cols = st.columns(3)
+
+with kpi_cols[0]:
+    if "rmse_cost" in df_by_day.columns:
+        latest_rmse = df_by_day.loc[latest_day, "rmse_cost"]
+        prev_rmse = df_by_day.loc[previous_day, "rmse_cost"]
+        delta_rmse = latest_rmse - prev_rmse
         st.metric(
-            label="Latest Claims Cost RMSE",
-            value=f"{latest_day_data['rmse_cost']:.2f}",
-            delta=f"{latest_day_data['rmse_cost'] - prev_day_data['rmse_cost']:.2f} vs Previous Day",
-            delta_color="inverse" # Lower is better
+            label="Claims Cost RMSE",
+            value=f"{latest_rmse:.2f}",
+            delta=f"{delta_rmse:.2f}",
+            delta_color="inverse",
+            help="Root Mean Squared Error. Lower is better."
         )
-    with kpi2:
+
+with kpi_cols[1]:
+    if "accuracy_fraud" in df_by_day.columns:
+        latest_fraud_acc = df_by_day.loc[latest_day, "accuracy_fraud"]
+        prev_fraud_acc = df_by_day.loc[previous_day, "accuracy_fraud"]
+        delta_fraud = latest_fraud_acc - prev_fraud_acc
         st.metric(
-            label="Latest Fraud Model Accuracy",
-            value=f"{latest_day_data['accuracy_fraud']:.1f}%",
-            delta=f"{latest_day_data['accuracy_fraud'] - prev_day_data['accuracy_fraud']:.1f}% vs Previous Day"
+            label="Fraud Detection Accuracy",
+            value=f"{latest_fraud_acc:.1f}%",
+            delta=f"{delta_fraud:.1f}%",
+            help="Model accuracy. Higher is better."
         )
-    with kpi3:
+
+with kpi_cols[2]:
+    if "accuracy_readmit" in df_by_day.columns:
+        latest_readmit_acc = df_by_day.loc[latest_day, "accuracy_readmit"]
+        prev_readmit_acc = df_by_day.loc[previous_day, "accuracy_readmit"]
+        delta_readmit = latest_readmit_acc - prev_readmit_acc
         st.metric(
-            label="Latest Readmission Model Accuracy",
-            value=f"{latest_day_data['accuracy_readmit']:.1f}%",
-            delta=f"{latest_day_data['accuracy_readmit'] - prev_day_data['accuracy_readmit']:.1f}% vs Previous Day"
+            label="Readmission Prediction Accuracy",
+            value=f"{latest_readmit_acc:.1f}%",
+            delta=f"{delta_readmit:.1f}%",
+            help="Model accuracy. Higher is better."
         )
 
-    st.markdown("---")
+st.markdown("---")
 
-    # --- Main Content Tabs ---
-    tab1, tab2, tab3, tab4 = st.tabs()
+# --- CHARTS IN TABS ---
+st.subheader("Performance Over Time")
+tab1, tab2, tab3 = st.tabs(["Cost Model (RMSE)", "Fraud Model (Accuracy)", "Readmission Model (Accuracy)"])
 
-    with tab1:
-        if "rmse_cost" in df_filtered.columns:
-            plot_rmse_analysis(df_filtered, df_by_day)
-        else:
-            st.info("RMSE metric not available in the data.")
+with tab1:
+    if "rmse_cost" in df_filtered.columns:
+        rmse_plot = df_filtered["rmse_cost"]
+        rmse_upper_plot = upper_band.reindex(df_filtered.index)
+        rmse_lower_plot = lower_band.reindex(df_filtered.index)
+        
+        fig_rmse = go.Figure()
+        # Control bands (plotted first to be in the background)
+        fig_rmse.add_trace(go.Scatter(
+            x=rmse_upper_plot.index, y=rmse_upper_plot,
+            line=dict(color='rgba(0,0,0,0)'),
+            showlegend=False, name='Upper Control'
+        ))
+        fig_rmse.add_trace(go.Scatter(
+            x=rmse_lower_plot.index, y=rmse_lower_plot,
+            fill='tonexty', fillcolor='rgba(255, 82, 82, 0.15)',
+            line=dict(color='rgba(0,0,0,0)'),
+            showlegend=False, name='Lower Control'
+        ))
+        # Main RMSE line
+        fig_rmse.add_trace(go.Scatter(
+            x=rmse_plot.index, y=rmse_plot,
+            mode='lines+markers', name='RMSE', line=dict(color='#007bff')
+        ))
+        
+        fig_rmse.update_layout(
+            title="Claims Cost Model - RMSE Over Time",
+            xaxis_title="Day", yaxis_title="RMSE",
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+        )
+        st.plotly_chart(fig_rmse, use_container_width=True)
+        st.caption("The shaded red area indicates the expected RMSE range (±2 standard deviations) based on a 7-day rolling window. Points above this band may indicate performance degradation.")
+    else:
+        st.info("RMSE metric not available in the data.")
 
-    with tab2:
-        if "accuracy_fraud" in df_filtered.columns:
-            plot_accuracy_analysis(df_filtered, "accuracy_fraud", "Fraud Detection", threshold=80)
-        else:
-            st.info("Fraud Detection metrics not available.")
+with tab2:
+    if "accuracy_fraud" in df_filtered.columns:
+        fig_fraud = go.Figure()
+        fig_fraud.add_trace(go.Scatter(
+            x=df_filtered.index, y=df_filtered["accuracy_fraud"],
+            mode='lines+markers', name='Accuracy', line=dict(color='#28a745')
+        ))
+        # Add threshold line
+        fig_fraud.add_hline(y=80, line_dash="dash", line_color="red",
+                            annotation_text="80% Threshold", annotation_position="bottom right")
+        fig_fraud.update_layout(
+            title="Fraud Detection Model - Accuracy Over Time",
+            xaxis_title="Day", yaxis_title="Accuracy (%)",
+            yaxis_range=[min(60, df_filtered["accuracy_fraud"].min() - 5), 101]
+        )
+        st.plotly_chart(fig_fraud, use_container_width=True)
+    else:
+        st.info("Fraud Detection metrics not available.")
 
-    with tab3:
-        if "accuracy_readmit" in df_filtered.columns:
-            plot_accuracy_analysis(df_filtered, "accuracy_readmit", "Readmission Prediction", threshold=80)
-        else:
-            st.info("Readmission Prediction metrics not available.")
+with tab3:
+    if "accuracy_readmit" in df_filtered.columns:
+        fig_readmit = go.Figure()
+        fig_readmit.add_trace(go.Scatter(
+            x=df_filtered.index, y=df_filtered["accuracy_readmit"],
+            mode='lines+markers', name='Accuracy', line=dict(color='#ffc107')
+        ))
+        # Add threshold line
+        fig_readmit.add_hline(y=80, line_dash="dash", line_color="red",
+                              annotation_text="80% Threshold", annotation_position="bottom right")
+        fig_readmit.update_layout(
+            title="Readmission Prediction Model - Accuracy Over Time",
+            xaxis_title="Day", yaxis_title="Accuracy (%)",
+            yaxis_range=[min(60, df_filtered["accuracy_readmit"].min() - 5), 101]
+        )
+        st.plotly_chart(fig_readmit, use_container_width=True)
+    else:
+        st.info("Readmission Prediction metrics not available.")
 
-    with tab4:
-        plot_correlation_heatmap(df_filtered)
+# ==============================================================================
+# 6. FURTHER ANALYSIS AND NEXT STEPS
+# ==============================================================================
+with st.expander("🔬 Further Analysis & Next Steps"):
+    st.markdown("""
+    When an alert is triggered, consider the following analytical steps:
 
+    **1. View Raw Data Statistics:**
+    The table below shows the descriptive statistics for the metrics in your selected time range. Use this for a quick quantitative assessment.
+    """)
+    st.dataframe(df_filtered.describe(), use_container_width=True)
+    
+    st.markdown("""
+    **2. Monitor Input Feature Drift:**
+    - A drop in model performance (like RMSE spikes or accuracy drops) is often caused by **data drift**, where the distribution of incoming data changes from what the model was trained on.
+    - **Action:** Implement monitoring for key input features. Track metrics like the **Population Stability Index (PSI)** or use statistical tests (e.g., Kolmogorov-Smirnov test) to compare the distribution of recent data against a baseline (e.g., the training data).
 
-if __name__ == "__main__":
-    main()
+    **3. Perform Root Cause Analysis:**
+    - **Action:** When a metric drops, segment the data to identify the cause. For example:
+        - Is the poor performance concentrated in a specific demographic, region, or claim type?
+        - Correlate the misclassified records (e.g., false negatives in fraud detection) with specific feature values to find patterns.
+    """)

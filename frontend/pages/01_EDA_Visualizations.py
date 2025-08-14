@@ -520,7 +520,7 @@ st.plotly_chart(fig_corr, use_container_width=True)
 
 st.markdown("""
 **Key Insights from the Heatmap:**
-* **Strongest Correlations:** As expected, `claim_cost` is now strongly correlated with utilization metrics like `num_inpatient_stays` and `num_procedures_performed`. This reflects the high cost of hospital care and surgical procedures.
+* **Strongest Correlations:** As expected, `claim_cost` is strongly correlated with utilization metrics like `num_inpatient_stays` and `num_procedures_performed`. This reflects the high cost of hospital care and surgical procedures.
 * **Clinical Cohesion:** There are strong positive correlations among all clinical activity metrics (visits, tests, medications, procedures). This is driven by the underlying `severity` factor, confirming that sicker patients require more comprehensive care.
 * **Demographic Drivers:** `age` and `chronic_condition_count` are the foundational drivers, showing a moderate positive correlation with nearly all utilization and cost metrics. This highlights their importance in predicting healthcare needs.
 """)
