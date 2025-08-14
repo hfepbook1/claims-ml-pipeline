@@ -13,68 +13,84 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- 2. Data Loading and Enhancement ---
+# --- 2. Data Loading and Enhancement (with CORRELATIONS) ---
 @st.cache_data
 def load_data():
     """
-    Generates synthetic healthcare claims dataset on the fly.
+    Generates a synthetic healthcare claims dataset with realistic correlations.
     """
-    print("Generating synthetic data...")
+    print("Generating correlated synthetic data...")
     np.random.seed(42)
     n = 100000
-    
+
     # Create base provider types with different cost multipliers
     provider_types = ["Hospital", "Clinic", "Urgent Care", "Primary Care", "Specialist", "Other"]
     provider_cost_multipliers = {
-        "Hospital": 3.5,        # Most expensive
-        "Specialist": 2.8,      # Second most expensive 
-        "Urgent Care": 1.8,     # Moderate cost
-        "Clinic": 1.2,          # Lower cost
-        "Primary Care": 1.0,    # Base cost
-        "Other": 0.8            # Least expensive
+        "Hospital": 3.5,
+        "Specialist": 2.8,
+        "Urgent Care": 1.8,
+        "Clinic": 1.2,
+        "Primary Care": 1.0,
+        "Other": 0.8
     }
+
+    # --- START OF MODIFIED LOGIC FOR CORRELATIONS ---
     
+    # 1. Generate independent base features first
+    age = np.random.randint(18, 90, size=n)
+    chronic_condition_count = np.random.poisson(1.5, size=n)
+
+    # 2. Create an underlying 'severity' factor based on age and chronic conditions
+    # This will be the main driver for other correlated features.
+    severity = (age / 90) + (chronic_condition_count / 5) + np.random.normal(0, 0.2, size=n)
+    severity = np.clip(severity, 0, None) # Ensure severity is not negative
+
+    # 3. Generate dependent clinical metrics based on the severity factor
     df = pd.DataFrame({
-        "age": np.random.randint(18, 90, size=n),
+        "age": age,
+        "chronic_condition_count": chronic_condition_count,
         "gender": np.random.choice(["Male", "Female"], size=n, p=[0.62, 0.38]),
         "region": np.random.choice(["North", "South", "East", "West"], size=n),
         "provider_type": np.random.choice(provider_types, size=n),
         "primary_diagnosis": np.random.choice(
-           ["COPD", "Hypertension", "Diabetes", "Heart Failure", "Stroke", "Other"], size=n),
-        "chronic_condition_count": np.random.poisson(2, size=n),
+            ["COPD", "Hypertension", "Diabetes", "Heart Failure", "Stroke", "Other"], size=n),
         "is_fraud": np.random.choice([0, 1], size=n, p=[0.985, 0.015]),
         "readmit_30d": np.random.choice([0, 1], size=n, p=[0.92, 0.08]),
-        "num_inpatient_stays": np.random.poisson(0.5, size=n),
-        "num_er_visits": np.random.poisson(1, size=n),
-        "num_visits": np.random.poisson(3, size=n),
-        "num_medications_used": np.random.poisson(5, size=n),
-        "num_procedures_performed": np.random.poisson(2, size=n),
-        "num_diagnostic_procedures": np.random.poisson(1, size=n),
-        "num_lab_tests": np.random.poisson(3, size=n),
-        "num_imaging_scans": np.random.poisson(2, size=n),
-        "num_emergency_visits": np.random.poisson(1, size=n),
-        "num_outpatient_visits": np.random.poisson(2, size=n),
+
+        # Dependent variables: their lambda is influenced by severity
+        "num_medications_used": np.random.poisson(1 + severity * 6),
+        "num_visits": np.random.poisson(1 + severity * 4),
+        "num_procedures_performed": np.random.poisson(0.5 + severity * 3),
+        "num_lab_tests": np.random.poisson(1 + severity * 5),
+        "num_inpatient_stays": np.random.poisson(0.1 + severity * 1.5),
+        "num_er_visits": np.random.poisson(0.2 + severity * 2)
     })
+
+    # 4. Generate claim_cost based on provider, base cost, AND utilization metrics
+    base_costs = np.random.gamma(2, 500, size=n)
     
-    # Generate claim costs with significant differences by provider type
-    base_costs = np.random.gamma(2.5, 2500.0, size=n)
-    df["claim_cost"] = np.round([
-        base_cost * provider_cost_multipliers[provider_type] 
-        for base_cost, provider_type in zip(base_costs, df["provider_type"])
-    ], 2)
+    utilization_cost_impact = (
+        df["num_procedures_performed"] * 1500 +
+        df["num_visits"] * 120 +
+        df["num_medications_used"] * 50 +
+        df["num_lab_tests"] * 40 +
+        df["num_inpatient_stays"] * 5000 +
+        df["num_er_visits"] * 800
+    )
+
+    provider_multipliers_array = np.array([provider_cost_multipliers[ptype] for ptype in df["provider_type"]])
+    df["claim_cost"] = np.round((base_costs + utilization_cost_impact) * provider_multipliers_array, 2)
+    
+    # --- END OF MODIFIED LOGIC ---
     
     df["claim_amount_reimbursed"] = np.round(df["claim_cost"] * 0.8, 2)
     
-    # Add claim_date column
     df["claim_date"] = pd.to_datetime("2023-01-01") + pd.to_timedelta(
-        np.random.randint(0, 365*2, size=n), unit="D"
-    )
+        np.random.randint(0, 365*2, size=n), unit="D")
     
-    # Add missing data to some columns (1% missing data)
     for col in ["gender", "provider_type", "primary_diagnosis", "claim_cost"]:
         df.loc[df.sample(frac=0.01, random_state=42).index, col] = np.nan
     
-    # FIXED: Use proper state abbreviations for choropleth map
     region_to_states = {
         "North": ["MN", "WI", "MI", "IL", "IN", "OH", "IA", "ND", "SD"],
         "South": ["TX", "FL", "GA", "NC", "VA", "TN", "AL", "MS", "LA", "AR", "SC", "KY", "WV", "OK"],
@@ -83,28 +99,23 @@ def load_data():
     }
     df["state"] = df["region"].apply(lambda r: np.random.choice(region_to_states.get(r, ["Unknown"])))
     
-    # Add member and provider IDs - FIXED: Convert provider_id to categorical
     unique_members = min(len(df), max(10, int(len(df) * 0.15)))
     df["member_id"] = np.random.randint(1, unique_members + 1, size=len(df))
     
-    # Generate provider IDs as strings for categorical treatment
     provider_ids = [f"PROV_{str(i).zfill(4)}" for i in range(1, 5501)]
     df['provider_id'] = np.random.choice(provider_ids, size=len(df))
     
-    # Add provider fraud flag based on fraudulent claims
     fraudulent_providers = df.loc[df['is_fraud']==1, 'provider_id'].unique()
     df['provider_fraud'] = df['provider_id'].isin(fraudulent_providers).astype(int)
     
     print("Generated DF columns:", df.columns.tolist())
     print("Generated DF shape:", df.shape)
-    print("claim_date in df:", 'claim_date' in df.columns)
-    print("state in df:", 'state' in df.columns)
     
     return df
 
+# The rest of your script remains unchanged.
 df = load_data()
 
-# Initialize session state for filters
 if 'reset_filters' not in st.session_state:
     st.session_state.reset_filters = False
 
@@ -112,7 +123,6 @@ if 'reset_filters' not in st.session_state:
 with st.sidebar:
     st.title("Filters")
     
-    # FIXED: Add reset button
     if st.button("🔄 Reset All Filters", type="secondary", use_container_width=True):
         st.session_state.reset_filters = True
         st.rerun()
@@ -120,29 +130,28 @@ with st.sidebar:
     st.markdown("---")
     
     with st.form(key='filter_form'):
-        # Set default values based on reset state
         default_gender = [] if st.session_state.reset_filters else df["gender"].dropna().unique()
         default_region = [] if st.session_state.reset_filters else df["region"].dropna().unique()
         default_provider = [] if st.session_state.reset_filters else df["provider_type"].dropna().unique()
         default_diag = [] if st.session_state.reset_filters else df["primary_diagnosis"].dropna().unique()
         
         sel_gender = st.multiselect(
-            "Gender", options=df["gender"].dropna().unique(), 
+            "Gender", options=df["gender"].dropna().unique(),
             default=default_gender,
             help="Filter claims by patient gender."
         )
         sel_region = st.multiselect(
-            "Region", options=df["region"].dropna().unique(), 
+            "Region", options=df["region"].dropna().unique(),
             default=default_region,
             help="Filter claims by geographical region."
         )
         sel_provider = st.multiselect(
-            "Provider Type", options=df["provider_type"].dropna().unique(), 
+            "Provider Type", options=df["provider_type"].dropna().unique(),
             default=default_provider,
             help="Filter claims by the type of healthcare provider."
         )
         sel_diag = st.multiselect(
-            "Primary Diagnosis", options=df["primary_diagnosis"].dropna().unique(), 
+            "Primary Diagnosis", options=df["primary_diagnosis"].dropna().unique(),
             default=default_diag,
             help="Filter claims by primary diagnosis code."
         )
@@ -150,16 +159,14 @@ with st.sidebar:
         default_age_range = (age_min, age_max)
         
         age_range = st.slider("Age Range", age_min, age_max, default_age_range,
-                             help="Filter patients by age range.")
+                              help="Filter patients by age range.")
         
         submit_button = st.form_submit_button(label='Apply Filters')
         
-        # Reset the reset_filters flag after form submission
         if submit_button and st.session_state.reset_filters:
             st.session_state.reset_filters = False
 
 # --- 4. Data Filtering and Preprocessing ---
-# Handle empty selections
 if not sel_gender:
     sel_gender = df["gender"].dropna().unique().tolist()
 if not sel_region:
@@ -169,7 +176,6 @@ if not sel_provider:
 if not sel_diag:
     sel_diag = df["primary_diagnosis"].dropna().unique().tolist()
 
-# Create boolean mask for filtering
 mask = (
     (df["gender"].isin(sel_gender) | df["gender"].isna()) &
     (df["region"].isin(sel_region) | df["region"].isna()) &
@@ -178,16 +184,8 @@ mask = (
     df["age"].between(age_range[0], age_range[1])
 )
 
-# Apply filter using .loc to preserve ALL columns
 df_filtered = df.loc[mask].copy()
 
-print("Filtered DF columns:", df_filtered.columns.tolist())
-print("Filtered DF shape:", df_filtered.shape)
-print("claim_date in filtered df:", 'claim_date' in df_filtered.columns)
-print("state in filtered df:", 'state' in df_filtered.columns)
-
-# Handle missing data without chained assignment warnings
-df_filtered = df_filtered.copy()
 df_filtered.loc[df_filtered["gender"].isna(), "gender"] = "Unknown"
 df_filtered.loc[df_filtered["provider_type"].isna(), "provider_type"] = "Unknown"
 df_filtered.loc[df_filtered["claim_cost"].isna(), "claim_cost"] = df_filtered["claim_cost"].median()
@@ -199,7 +197,6 @@ if df_filtered.empty:
 # --- 5. Dashboard Layout and Visualizations ---
 st.title(":material/dashboard: Healthcare Claims Analytics Dashboard")
 
-# --- Scorecards with Key Performance Indicators ---
 st.subheader("Key Business Metrics")
 col1, col2, col3, col4 = st.columns(4)
 
@@ -227,7 +224,6 @@ st.markdown("""
 _This section visualizes monthly claim volume and total cost to help identify seasonal patterns and inform financial planning._
 """)
 
-# Process claim_date for time series analysis
 df_filtered["claim_date"] = pd.to_datetime(df_filtered["claim_date"])
 df_filtered["month"] = df_filtered["claim_date"].dt.to_period("M").dt.to_timestamp()
 monthly_agg = df_filtered.groupby("month").agg(
@@ -235,7 +231,6 @@ monthly_agg = df_filtered.groupby("month").agg(
     total_cost=pd.NamedAgg(column="claim_cost", aggfunc="sum")
 ).reset_index()
 
-# Simple moving average forecast for the next 3 months
 if len(monthly_agg) >= 3:
     last3 = monthly_agg.tail(3)
     avg_vol = last3["claim_volume"].mean()
@@ -245,20 +240,19 @@ else:
     avg_cost = monthly_agg["total_cost"].mean() if not monthly_agg.empty else 0
 
 future_months = pd.date_range(
-    monthly_agg["month"].max() + pd.offsets.MonthBegin(1) if not monthly_agg.empty else pd.Timestamp("2023-01-01"), 
-    periods=3, freq="M"
+    monthly_agg["month"].max() + pd.offsets.MonthBegin(1) if not monthly_agg.empty else pd.Timestamp("2023-01-01"),
+    periods=3, freq="MS"
 )
 forecast = pd.DataFrame({"month": future_months, "claim_volume": avg_vol, "total_cost": avg_cost})
 monthly_full = pd.concat([monthly_agg, forecast], ignore_index=True)
 
 fig_trend = go.Figure()
 fig_trend.add_trace(go.Scatter(x=monthly_full["month"], y=monthly_full["claim_volume"],
-                               mode="lines+markers", name="Claim Volume", line=dict(color="#1f77b4")))
+                                mode="lines+markers", name="Claim Volume", line=dict(color="#1f77b4")))
 fig_trend.add_trace(go.Scatter(x=monthly_full["month"], y=monthly_full["total_cost"],
-                                 mode="lines+markers", name="Total Cost", yaxis="y2",
-                                 line=dict(color="#ff7f0e")))
+                                  mode="lines+markers", name="Total Cost", yaxis="y2",
+                                  line=dict(color="#ff7f0e")))
 
-# FIXED: Use add_shape instead of add_vline to avoid timestamp issues
 if not monthly_agg.empty:
     forecast_start = monthly_agg["month"].max()
     fig_trend.add_shape(
@@ -315,7 +309,6 @@ with col2_op:
     metric_choice = st.radio("Metric", ["Total Cost", "Claim Count"], horizontal=True,
                              key="geo_metric_radio")
     
-    # FIXED: Proper state filtering and aggregation for choropleth
     state_filtered = df_filtered[df_filtered["state"] != "Unknown"].copy()
     
     if not state_filtered.empty:
@@ -328,27 +321,20 @@ with col2_op:
         map_title = f"{metric_choice} by State"
         color_label = f"{metric_choice} (USD)" if metric_choice == "Total Cost" else "Claim Count"
         
-        # Debug info
-        print("State aggregation data:")
-        print(state_agg.head())
-        print(f"Color column '{color_col}' range: {state_agg[color_col].min()} to {state_agg[color_col].max()}")
-        
-        # FIXED: Improved choropleth map with state abbreviations
         fig_map = px.choropleth(
-            state_agg, 
-            locations="state", 
+            state_agg,
+            locations="state",
             locationmode="USA-states",
-            color=color_col, 
+            color=color_col,
             color_continuous_scale="Blues",
             range_color=[state_agg[color_col].min(), state_agg[color_col].max()],
             scope="usa",
-            title=map_title, 
+            title=map_title,
             labels={color_col: color_label},
             hover_name="state",
             hover_data={color_col: ':,.0f'}
         )
         
-        # Update layout for better visualization
         fig_map.update_layout(
             geo=dict(
                 showframe=False,
@@ -386,7 +372,6 @@ with tab_top_providers:
     member_cost = df_filtered.groupby("provider_id", as_index=False)["claim_cost"].sum().rename(columns={"claim_cost": "total_cost"})
     top_providers = member_cost.nlargest(10, "total_cost")
     
-    # FIXED: Treat provider_id as categorical
     top_providers["provider_id"] = top_providers["provider_id"].astype(str)
     
     fig_top_providers = px.bar(
@@ -404,7 +389,6 @@ with tab_top_providers:
 with tab_fraud_analysis:
     st.subheader("Fraudulent Claims by Provider Type")
     
-    # FIXED: Exclude "Unknown" category from fraud analysis
     fraud_filtered = df_filtered[df_filtered["provider_type"] != "Unknown"].copy()
     
     fraud_counts = fraud_filtered[fraud_filtered["is_fraud"] == 1].groupby("provider_type").size().reset_index(name="fraud_count")
@@ -445,7 +429,6 @@ with col1_cost:
 with col2_cost:
     st.subheader("Average Claim Cost by Provider Type")
     
-    # FIXED: Exclude "Unknown" category and show significant differences
     cost_filtered = df_filtered[df_filtered["provider_type"] != "Unknown"].copy()
     cost_by_provider = cost_filtered.groupby("provider_type")["claim_cost"].mean().reset_index()
     cost_by_provider = cost_by_provider.sort_values("claim_cost", ascending=False)
@@ -470,9 +453,10 @@ col1_demo, col2_demo = st.columns(2)
 with col1_demo:
     st.subheader("Claims by Age Group")
     df_filtered["age_group"] = pd.cut(
-        df_filtered["age"], 
-        bins=[0, 30, 50, 65, 100], 
-        labels=["18-30", "31-50", "51-65", "65+"]
+        df_filtered["age"],
+        bins=[17, 30, 50, 65, 100],
+        labels=["18-30", "31-50", "51-65", "65+"],
+        right=True
     )
     age_analysis = df_filtered.groupby("age_group").agg(
         claim_count=("claim_cost", "size"),
@@ -509,9 +493,8 @@ _This heatmap reveals the relationships between different numerical features. A 
 while a value close to -1 indicates a strong negative correlation. A value near 0 suggests no correlation._
 """)
 
-# --- UPDATED: Select specific numeric columns for a cleaner correlation matrix ---
+# Select specific numeric columns for a cleaner correlation matrix
 numeric_cols = df_filtered.select_dtypes(include=np.number).columns.tolist()
-# Exclude identifiers, flags, and derived columns for a more focused analysis
 cols_to_exclude = ["provider_fraud", "is_fraud", "claim_amount_reimbursed", "member_id", "readmit_30d"]
 cols_for_corr = [col for col in numeric_cols if col not in cols_to_exclude]
 corr_matrix = df_filtered[cols_for_corr].corr()
@@ -520,7 +503,7 @@ corr_matrix = df_filtered[cols_for_corr].corr()
 # Create the heatmap
 fig_corr = px.imshow(
     corr_matrix,
-    text_auto=True,
+    text_auto=".2f", # Format text to 2 decimal places
     aspect="auto",
     color_continuous_scale='RdBu_r',
     zmin=-1,
@@ -535,12 +518,11 @@ fig_corr.update_layout(
 )
 st.plotly_chart(fig_corr, use_container_width=True)
 
-# --- UPDATED: Insights based on the revised correlation matrix ---
 st.markdown("""
 **Key Insights from the Heatmap:**
-* A notable positive correlation exists between **`chronic_condition_count`** and **`num_medications_used`**. This is clinically expected, as patients with more chronic illnesses typically require more medications for treatment.
-* Features related to healthcare utilization, such as **`num_inpatient_stays`**, **`num_er_visits`**, and **`num_visits`**, all show a mild positive correlation with **`claim_cost`**. This confirms that increased interaction with the healthcare system is associated with higher costs.
-* **`age`** also shows a slight positive correlation with cost and chronic conditions, reflecting the general trend of increasing healthcare needs with age.
+* **Strongest Correlations:** As expected, `claim_cost` is now strongly correlated with utilization metrics like `num_inpatient_stays` and `num_procedures_performed`. This reflects the high cost of hospital care and surgical procedures.
+* **Clinical Cohesion:** There are strong positive correlations among all clinical activity metrics (visits, tests, medications, procedures). This is driven by the underlying `severity` factor, confirming that sicker patients require more comprehensive care.
+* **Demographic Drivers:** `age` and `chronic_condition_count` are the foundational drivers, showing a moderate positive correlation with nearly all utilization and cost metrics. This highlights their importance in predicting healthcare needs.
 """)
 
 st.divider()
@@ -564,14 +546,13 @@ with st.expander(":material/database: **Data Quality Overview & Source Metadata*
     st.markdown("---")
     st.markdown("""
     **Insights from Data Quality Analysis:**
-    *   `claim_cost` and `gender` columns had minor missing values (<1%) and were imputed to ensure visualization consistency.
-    *   This dataset is entirely synthetic, designed to simulate real-world healthcare claims scenarios without containing actual patient data.
-    *   All data is generated using statistical distributions that reflect realistic healthcare patterns.
-    *   The synthetic data includes seasonal patterns, realistic fraud rates (~1.5%), and typical readmission rates (~8%).
-    *   Provider costs vary significantly: Hospital (3.5x), Specialist (2.8x), Urgent Care (1.8x), Clinic (1.2x), Primary Care (1.0x), Other (0.8x).
+    * `claim_cost` and `gender` columns had minor missing values (<1%) and were imputed to ensure visualization consistency.
+    * This dataset is entirely synthetic, designed to simulate real-world healthcare claims scenarios without containing actual patient data.
+    * All data is generated using statistical distributions that reflect realistic healthcare patterns.
+    * The synthetic data includes seasonal patterns, realistic fraud rates (~1.5%), and typical readmission rates (~8%).
+    * Provider costs vary significantly: Hospital (3.5x), Specialist (2.8x), Urgent Care (1.8x), Clinic (1.2x), Primary Care (1.0x), Other (0.8x).
     """)
     
-    # Data summary table
     st.markdown("**Column Summary:**")
     summary_data = {
         "Column": df_filtered.columns.tolist(),
