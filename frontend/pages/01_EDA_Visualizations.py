@@ -256,7 +256,9 @@ fig_trend.update_layout(
 )
 st.plotly_chart(fig_trend, use_container_width=True)
 
-# --- Operational & Risk Analysis ---
+st.divider()
+
+# --- 6. Operational & Risk Analysis ---
 st.header("Operational and Risk Analysis")
 col1_op, col2_op = st.columns(2)
 
@@ -322,7 +324,9 @@ with col2_op:
         resource allocation and provider network expansion strategies._
     """)
 
-# --- Provider Performance and Fraud Detection ---
+st.divider()
+
+# --- 7. Provider Performance and Fraud Detection ---
 st.header("Provider Performance & Fraud Risk")
 st.markdown("""
 _This section provides a granular view of provider activity, with a focus on identifying high-cost and potentially fraudulent providers._
@@ -375,7 +379,9 @@ with tab_fraud_analysis:
         enabling focused risk management and compliance efforts._
     """)
 
-# --- Additional Analysis: Cost Distribution ---
+st.divider()
+
+# --- 8. Additional Analysis: Cost Distribution ---
 st.header("Cost Analysis")
 col1_cost, col2_cost = st.columns(2)
 
@@ -408,7 +414,9 @@ with col2_cost:
     fig_avg_cost.update_layout(showlegend=False, xaxis_tickangle=-45)
     st.plotly_chart(fig_avg_cost, use_container_width=True)
 
-# --- Age and Gender Analysis ---
+st.divider()
+
+# --- 9. Age and Gender Analysis ---
 st.header("Demographics Analysis")
 col1_demo, col2_demo = st.columns(2)
 
@@ -445,7 +453,10 @@ with col2_demo:
     )
     st.plotly_chart(fig_gender, use_container_width=True)
 
-# --- Data Quality and Metadata Section ---
+st.divider()
+
+# --- 10. Data Quality and Metadata Section ---
+st.divider()
 with st.expander(":material/database: **Data Quality Overview & Source Metadata**"):
     st.markdown("""
     _This section provides transparency on the data's health and its source.
