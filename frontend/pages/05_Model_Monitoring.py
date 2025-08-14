@@ -127,7 +127,7 @@ def plot_rmse_analysis(df_filtered, df_full):
         # Create distribution plot
         if not df_filtered['rmse_cost'].empty:
             hist_data = [df_filtered['rmse_cost'].dropna()]
-            group_labels =
+            group_labels = ['RMSE']
             fig_dist = ff.create_distplot(hist_data, group_labels, show_hist=False, colors=['#0055a4'])
             fig_dist.update_layout(xaxis_title="RMSE Value", yaxis_title="Density", showlegend=False)
             st.plotly_chart(fig_dist, use_container_width=True)
