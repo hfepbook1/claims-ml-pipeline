@@ -221,7 +221,7 @@ with col1_op:
 
 with col2_op:
     st.subheader("Geographic Distribution of Claims")
-    metric_choice = st.radio("Metric",, horizontal=True,
+    metric_choice = st.radio("Metric", ["Total Cost", "Claim Count"], horizontal=True,
                              key="geo_metric_radio")
     
     state_agg = df_filtered.groupby("state").agg(
