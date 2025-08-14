@@ -23,21 +23,39 @@ def load_data():
     np.random.seed(42)
     n = 100000
     
+    # Create base provider types with different cost multipliers
+    provider_types = ["Hospital", "Clinic", "Urgent Care", "Primary Care", "Specialist", "Other"]
+    provider_cost_multipliers = {
+        "Hospital": 3.5,        # Most expensive
+        "Specialist": 2.8,      # Second most expensive  
+        "Urgent Care": 1.8,     # Moderate cost
+        "Clinic": 1.2,          # Lower cost
+        "Primary Care": 1.0,    # Base cost
+        "Other": 0.8            # Least expensive
+    }
+    
     df = pd.DataFrame({
         "age": np.random.randint(18, 90, size=n),
-        "gender": np.random.choice(["Male", "Female"], size=n, p=[0.49, 0.51]),
+        "gender": np.random.choice(["Male", "Female"], size=n, p=[0.62, 0.38]),
         "region": np.random.choice(["North", "South", "East", "West"], size=n),
-        "provider_type": np.random.choice(["Hospital", "Clinic", "Pharmacy", "Lab", "Other"], size=n),
+        "provider_type": np.random.choice(provider_types, size=n),
         "primary_diagnosis": np.random.choice(
            ["COPD", "Hypertension", "Diabetes", "Heart Failure", "Stroke", "Other"], size=n),
         "chronic_condition_count": np.random.poisson(2, size=n),
-        "claim_cost": np.round(np.random.gamma(2.5, 2500.0, size=n), 2),
-        "claim_amount_reimbursed": np.round(np.random.gamma(2.5, 2500.0, size=n) * 0.8, 2),
         "is_fraud": np.random.choice([0, 1], size=n, p=[0.985, 0.015]),
         "readmit_30d": np.random.choice([0, 1], size=n, p=[0.92, 0.08]),
         "num_inpatient_stays": np.random.poisson(0.5, size=n),
         "num_er_visits": np.random.poisson(1, size=n),
     })
+    
+    # Generate claim costs with significant differences by provider type
+    base_costs = np.random.gamma(2.5, 2500.0, size=n)
+    df["claim_cost"] = np.round([
+        base_cost * provider_cost_multipliers[provider_type] 
+        for base_cost, provider_type in zip(base_costs, df["provider_type"])
+    ], 2)
+    
+    df["claim_amount_reimbursed"] = np.round(df["claim_cost"] * 0.8, 2)
     
     # Add claim_date column
     df["claim_date"] = pd.to_datetime("2023-01-01") + pd.to_timedelta(
@@ -48,19 +66,22 @@ def load_data():
     for col in ["gender", "provider_type", "primary_diagnosis", "claim_cost"]:
         df.loc[df.sample(frac=0.01, random_state=42).index, col] = np.nan
     
-    # Add state mapping based on region
+    # FIXED: Add proper state mapping with full state names for choropleth map
     region_to_states = {
-        "North": ["Minnesota", "Wisconsin", "Michigan", "Illinois", "Indiana", "Ohio"],
-        "South": ["Texas", "Florida", "Georgia", "North Carolina", "Virginia", "Tennessee"],
-        "East": ["New York", "Pennsylvania", "New Jersey", "Connecticut", "Massachusetts", "Maine"],
-        "West": ["California", "Oregon", "Washington", "Arizona", "Nevada", "Colorado"]
+        "North": ["Minnesota", "Wisconsin", "Michigan", "Illinois", "Indiana", "Ohio", "Iowa", "North Dakota", "South Dakota"],
+        "South": ["Texas", "Florida", "Georgia", "North Carolina", "Virginia", "Tennessee", "Alabama", "Mississippi", "Louisiana", "Arkansas", "South Carolina", "Kentucky", "West Virginia", "Oklahoma"],
+        "East": ["New York", "Pennsylvania", "New Jersey", "Connecticut", "Massachusetts", "Maine", "Vermont", "New Hampshire", "Rhode Island", "Delaware", "Maryland"],
+        "West": ["California", "Oregon", "Washington", "Arizona", "Nevada", "Colorado", "Utah", "Idaho", "Montana", "Wyoming", "New Mexico", "Alaska", "Hawaii"]
     }
     df["state"] = df["region"].apply(lambda r: np.random.choice(region_to_states.get(r, ["Unknown"])))
     
-    # Add member and provider IDs
+    # Add member and provider IDs - FIXED: Convert provider_id to categorical
     unique_members = min(len(df), max(10, int(len(df) * 0.15)))
     df["member_id"] = np.random.randint(1, unique_members + 1, size=len(df))
-    df['provider_id'] = np.random.randint(1, 5500, size=len(df))
+    
+    # Generate provider IDs as strings for categorical treatment
+    provider_ids = [f"PROV_{str(i).zfill(4)}" for i in range(1, 5501)]
+    df['provider_id'] = np.random.choice(provider_ids, size=len(df))
     
     # Add provider fraud flag based on fraudulent claims
     fraudulent_providers = df.loc[df['is_fraud']==1, 'provider_id'].unique()
@@ -261,7 +282,9 @@ with col2_op:
     metric_choice = st.radio("Metric", ["Total Cost", "Claim Count"], horizontal=True,
                              key="geo_metric_radio")
     
-    state_agg = df_filtered.groupby("state").agg(
+    # FIXED: Filter out "Unknown" states and ensure proper state aggregation
+    state_filtered = df_filtered[df_filtered["state"] != "Unknown"].copy()
+    state_agg = state_filtered.groupby("state").agg(
         claim_count=("claim_cost", "size"),
         total_cost=("claim_cost", "sum")
     ).reset_index()
@@ -270,11 +293,29 @@ with col2_op:
     map_title = f"{metric_choice} by State"
     color_label = f"{metric_choice} (USD)" if metric_choice == "Total Cost" else "Claim Count"
     
+    # FIXED: Improved choropleth map with better color scaling
     fig_map = px.choropleth(
-        state_agg, locations="state", locationmode="USA-states",
-        color=color_col, color_continuous_scale="Blues", scope="usa",
-        title=map_title, labels={color_col: color_label}
+        state_agg, 
+        locations="state", 
+        locationmode="USA-states",
+        color=color_col, 
+        color_continuous_scale="Blues", 
+        scope="usa",
+        title=map_title, 
+        labels={color_col: color_label},
+        hover_data={color_col: ':,.0f'}
     )
+    
+    # Update layout for better visualization
+    fig_map.update_layout(
+        geo=dict(
+            showframe=False,
+            showcoastlines=True,
+            projection_type='albers usa'
+        ),
+        title_x=0.5
+    )
+    
     st.plotly_chart(fig_map, use_container_width=True)
     st.markdown("""
         _A geographic map highlights areas with high claims activity. This insight can guide
@@ -294,6 +335,9 @@ with tab_top_providers:
     member_cost = df_filtered.groupby("provider_id", as_index=False)["claim_cost"].sum().rename(columns={"claim_cost": "total_cost"})
     top_providers = member_cost.nlargest(10, "total_cost")
     
+    # FIXED: Treat provider_id as categorical
+    top_providers["provider_id"] = top_providers["provider_id"].astype(str)
+    
     fig_top_providers = px.bar(
         top_providers, x="total_cost", y="provider_id", orientation="h",
         title="Top 10 Providers by Total Claim Cost",
@@ -308,10 +352,15 @@ with tab_top_providers:
 
 with tab_fraud_analysis:
     st.subheader("Fraudulent Claims by Provider Type")
-    fraud_counts = df_filtered[df_filtered["is_fraud"] == 1].groupby("provider_type").size().reset_index(name="fraud_count")
-    total_claims_by_provider = df_filtered.groupby("provider_type").size().reset_index(name="total_claims")
     
-    fraud_rates = pd.merge(fraud_counts, total_claims_by_provider, on="provider_type", how="left")
+    # FIXED: Exclude "Unknown" category from fraud analysis
+    fraud_filtered = df_filtered[df_filtered["provider_type"] != "Unknown"].copy()
+    
+    fraud_counts = fraud_filtered[fraud_filtered["is_fraud"] == 1].groupby("provider_type").size().reset_index(name="fraud_count")
+    total_claims_by_provider = fraud_filtered.groupby("provider_type").size().reset_index(name="total_claims")
+    
+    fraud_rates = pd.merge(fraud_counts, total_claims_by_provider, on="provider_type", how="right")
+    fraud_rates["fraud_count"] = fraud_rates["fraud_count"].fillna(0)
     fraud_rates["fraud_rate"] = (fraud_rates["fraud_count"] / fraud_rates["total_claims"]) * 100
     
     fig_fraud_rates = px.bar(fraud_rates.sort_values("fraud_rate", ascending=False),
@@ -342,15 +391,20 @@ with col1_cost:
 
 with col2_cost:
     st.subheader("Average Claim Cost by Provider Type")
-    cost_by_provider = df_filtered.groupby("provider_type")["claim_cost"].mean().reset_index()
+    
+    # FIXED: Exclude "Unknown" category and show significant differences
+    cost_filtered = df_filtered[df_filtered["provider_type"] != "Unknown"].copy()
+    cost_by_provider = cost_filtered.groupby("provider_type")["claim_cost"].mean().reset_index()
     cost_by_provider = cost_by_provider.sort_values("claim_cost", ascending=False)
     
     fig_avg_cost = px.bar(
         cost_by_provider, x="provider_type", y="claim_cost",
         title="Average Claim Cost by Provider Type",
         labels={"provider_type": "Provider Type", "claim_cost": "Average Claim Cost (USD)"},
-        color="claim_cost", color_continuous_scale="viridis"
+        color="claim_cost", color_continuous_scale="viridis",
+        text="claim_cost"
     )
+    fig_avg_cost.update_traces(texttemplate='$%{text:,.0f}', textposition='outside')
     fig_avg_cost.update_layout(showlegend=False, xaxis_tickangle=-45)
     st.plotly_chart(fig_avg_cost, use_container_width=True)
 
@@ -414,6 +468,7 @@ with st.expander(":material/database: **Data Quality Overview & Source Metadata*
     *   This dataset is entirely synthetic, designed to simulate real-world healthcare claims scenarios without containing actual patient data.
     *   All data is generated using statistical distributions that reflect realistic healthcare patterns.
     *   The synthetic data includes seasonal patterns, realistic fraud rates (~1.5%), and typical readmission rates (~8%).
+    *   Provider costs vary significantly: Hospital (3.5x), Specialist (2.8x), Urgent Care (1.8x), Clinic (1.2x), Primary Care (1.0x), Other (0.8x).
     """)
     
     # Data summary table
