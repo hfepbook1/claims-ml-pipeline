@@ -35,10 +35,10 @@ def load_data():
         df = pd.DataFrame({
             "age": np.random.randint(18, 90, size=n),
             "gender": np.random.choice(["Male", "Female"], size=n, p=[0.49, 0.51]),
-            "region": np.random.choice(, size=n),
-            "provider_type": np.random.choice(, size=n),
+            "region": np.random.choice(["North", "South", "East", "West"], size=n),
+            "provider_type": np.random.choice(["Hospital", "Clinic", "Pharmacy", "Lab", "Other"], size=n),
             "primary_diagnosis": np.random.choice(
-               , size=n),
+               ["COPD", "Hypertension", "Diabetes", "Heart Failure", "Stroke", "Other"], size=n),
             "chronic_condition_count": np.random.poisson(2, size=n),
             "claim_cost": np.round(np.random.gamma(2.5, 2500.0, size=n), 2),
             "claim_amount_reimbursed": np.round(np.random.gamma(2.5, 2500.0, size=n) * 0.8, 2), # New column for more detailed analysis
