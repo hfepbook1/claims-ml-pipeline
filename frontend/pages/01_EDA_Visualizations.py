@@ -114,6 +114,11 @@ df_filtered = df[
     df["age"].between(age_range[0], age_range[1])
 ].copy()
 
+if 'claim_date' not in df_filtered.columns and 'claim_date' in df.columns:
+    # Add the claim_date column from the original df using the same index
+    df_filtered['claim_date'] = df.loc[df_filtered.index, 'claim_date']
+
+
 # Handle missing data for visualizations
 # For non-technical users, we don't display raw imputation, but we handle it
 # to ensure charts are generated correctly without errors.
