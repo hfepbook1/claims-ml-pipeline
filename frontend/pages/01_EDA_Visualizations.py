@@ -205,8 +205,25 @@ fig_trend.add_trace(go.Scatter(x=monthly_full["month"], y=monthly_full["claim_vo
 fig_trend.add_trace(go.Scatter(x=monthly_full["month"], y=monthly_full["total_cost"],
                                  mode="lines+markers", name="Total Cost", yaxis="y2",
                                  line=dict(color="#ff7f0e")))
-fig_trend.add_vline(x=monthly_agg["month"].max(), line_width=1, line_dash="dash", line_color="gray",
-                    annotation_text="Start of Forecast", annotation_position="top right")
+
+# FIXED: Use add_shape instead of add_vline to avoid timestamp issues
+if not monthly_agg.empty:
+    forecast_start = monthly_agg["month"].max()
+    fig_trend.add_shape(
+        type="line",
+        x0=forecast_start, x1=forecast_start,
+        y0=0, y1=1,
+        yref="paper",
+        line=dict(color="gray", width=1, dash="dash")
+    )
+    fig_trend.add_annotation(
+        x=forecast_start,
+        y=0.95,
+        yref="paper",
+        text="Start of Forecast",
+        showarrow=False,
+        font=dict(color="gray", size=10)
+    )
 
 fig_trend.update_layout(
     title="Monthly Claim Volume & Total Cost (with 3-month Forecast)",
