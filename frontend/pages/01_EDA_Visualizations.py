@@ -42,8 +42,8 @@ def load_data():
             "chronic_condition_count": np.random.poisson(2, size=n),
             "claim_cost": np.round(np.random.gamma(2.5, 2500.0, size=n), 2),
             "claim_amount_reimbursed": np.round(np.random.gamma(2.5, 2500.0, size=n) * 0.8, 2), # New column for more detailed analysis
-            "is_fraud": np.random.choice(, size=n, p=[0.985, 0.015]),
-            "readmit_30d": np.random.choice(, size=n, p=[0.92, 0.08]), # 8% readmission rate
+            "is_fraud": np.random.choice([0, 1], size=n, p=[0.985, 0.015]),
+            "readmit_30d": np.random.choice([0, 1], size=n, p=[0.92, 0.08]), # 8% readmission rate
             "num_inpatient_stays": np.random.poisson(0.5, size=n), # New column for operational analysis
             "num_er_visits": np.random.poisson(1, size=n), # New column for operational analysis
         })
