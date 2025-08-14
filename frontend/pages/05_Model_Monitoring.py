@@ -9,7 +9,6 @@ import plotly.graph_objects as go
 # ==============================================================================
 st.set_page_config(
     page_title="Model Monitoring Dashboard",
-    page_icon="🤖",
     layout="wide"
 )
 

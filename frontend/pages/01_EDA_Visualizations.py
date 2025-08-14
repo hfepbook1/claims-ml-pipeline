@@ -7,8 +7,7 @@ from datetime import datetime, timedelta
 
 # --- 1. Page Configuration & Theming ---
 st.set_page_config(
-    page_title="Healthcare Claims Dashboard",
-    page_icon="🏥",
+    page_title="Exploratory Data Analysis & Insights",
     layout="wide",
     initial_sidebar_state="expanded"
 )
