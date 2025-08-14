@@ -106,17 +106,22 @@ with st.sidebar:
         submit_button = st.form_submit_button(label='Apply Filters')
 
 # --- 4. Data Filtering and Preprocessing ---
-df_filtered = df[
+# Create a boolean mask
+mask = (
     df["gender"].isin(sel_gender) &
     df["region"].isin(sel_region) &
     df["provider_type"].isin(sel_provider) &
     df["primary_diagnosis"].isin(sel_diag) &
     df["age"].between(age_range[0], age_range[1])
-].copy()
+)
 
-if 'claim_date' not in df_filtered.columns and 'claim_date' in df.columns:
-    # Add the claim_date column from the original df using the same index
-    df_filtered['claim_date'] = df.loc[df_filtered.index, 'claim_date']
+# Use .loc to preserve all columns
+df_filtered = df.loc[mask].copy()
+
+# Check if 'claim_date' exists
+if 'claim_date' not in df_filtered.columns:
+    st.error("claim_date column is missing after filtering.")
+    st.stop()
 
 
 # Handle missing data for visualizations
