@@ -494,7 +494,45 @@ with col2_demo:
 
 st.divider()
 
-# --- 10. Data Quality and Metadata Section ---
+# --- 10. Correlation Analysis ---
+st.header("Correlation Analysis")
+st.markdown("""
+_This heatmap reveals the relationships between different numerical features. A value close to 1 indicates a strong positive correlation, 
+while a value close to -1 indicates a strong negative correlation. A value near 0 suggests no correlation._
+""")
+
+# Select only numeric columns for the correlation matrix
+numeric_cols = df_filtered.select_dtypes(include=np.number).columns.tolist()
+corr_matrix = df_filtered[numeric_cols].corr()
+
+# Create the heatmap
+fig_corr = px.imshow(
+    corr_matrix,
+    text_auto=True,
+    aspect="auto",
+    color_continuous_scale='RdBu_r',
+    zmin=-1, 
+    zmax=1,
+    title="Correlation Matrix of Numerical Features"
+)
+
+fig_corr.update_layout(
+    coloraxis_colorbar=dict(title="Correlation"),
+    xaxis_title="Features",
+    yaxis_title="Features"
+)
+st.plotly_chart(fig_corr, use_container_width=True)
+
+st.markdown("""
+**Key Insights from the Heatmap:**
+* **`claim_cost`** and **`claim_amount_reimbursed`** have a perfect positive correlation, as expected since one is derived from the other.
+* Other features like **`num_inpatient_stays`** and **`chronic_condition_count`** show a mild positive correlation with `claim_cost`, which is logical in a healthcare context.
+* This analysis helps identify which factors are most strongly associated with higher or lower claim costs.
+""")
+
+st.divider()
+
+# --- 11. Data Quality and Metadata Section ---
 with st.expander(":material/database: **Data Quality Overview & Source Metadata**"):
     st.markdown("""
     _This section provides transparency on the data's health and its source.
