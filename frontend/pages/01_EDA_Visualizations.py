@@ -27,7 +27,7 @@ def load_data():
     provider_types = ["Hospital", "Clinic", "Urgent Care", "Primary Care", "Specialist", "Other"]
     provider_cost_multipliers = {
         "Hospital": 3.5,        # Most expensive
-        "Specialist": 2.8,      # Second most expensive  
+        "Specialist": 2.8,      # Second most expensive 
         "Urgent Care": 1.8,     # Moderate cost
         "Clinic": 1.2,          # Lower cost
         "Primary Care": 1.0,    # Base cost
@@ -66,12 +66,12 @@ def load_data():
     for col in ["gender", "provider_type", "primary_diagnosis", "claim_cost"]:
         df.loc[df.sample(frac=0.01, random_state=42).index, col] = np.nan
     
-    # FIXED: Add proper state mapping with full state names for choropleth map
+    # FIXED: Use proper state abbreviations for choropleth map
     region_to_states = {
-        "North": ["Minnesota", "Wisconsin", "Michigan", "Illinois", "Indiana", "Ohio", "Iowa", "North Dakota", "South Dakota"],
-        "South": ["Texas", "Florida", "Georgia", "North Carolina", "Virginia", "Tennessee", "Alabama", "Mississippi", "Louisiana", "Arkansas", "South Carolina", "Kentucky", "West Virginia", "Oklahoma"],
-        "East": ["New York", "Pennsylvania", "New Jersey", "Connecticut", "Massachusetts", "Maine", "Vermont", "New Hampshire", "Rhode Island", "Delaware", "Maryland"],
-        "West": ["California", "Oregon", "Washington", "Arizona", "Nevada", "Colorado", "Utah", "Idaho", "Montana", "Wyoming", "New Mexico", "Alaska", "Hawaii"]
+        "North": ["MN", "WI", "MI", "IL", "IN", "OH", "IA", "ND", "SD"],
+        "South": ["TX", "FL", "GA", "NC", "VA", "TN", "AL", "MS", "LA", "AR", "SC", "KY", "WV", "OK"],
+        "East": ["NY", "PA", "NJ", "CT", "MA", "ME", "VT", "NH", "RI", "DE", "MD"],
+        "West": ["CA", "OR", "WA", "AZ", "NV", "CO", "UT", "ID", "MT", "WY", "NM", "AK", "HI"]
     }
     df["state"] = df["region"].apply(lambda r: np.random.choice(region_to_states.get(r, ["Unknown"])))
     
@@ -96,36 +96,59 @@ def load_data():
 
 df = load_data()
 
+# Initialize session state for filters
+if 'reset_filters' not in st.session_state:
+    st.session_state.reset_filters = False
+
 # --- 3. Sidebar for Filters & Controls ---
 with st.sidebar:
     st.title("Filters")
     
+    # FIXED: Add reset button
+    if st.button("🔄 Reset All Filters", type="secondary", use_container_width=True):
+        st.session_state.reset_filters = True
+        st.rerun()
+    
+    st.markdown("---")
+    
     with st.form(key='filter_form'):
+        # Set default values based on reset state
+        default_gender = [] if st.session_state.reset_filters else df["gender"].dropna().unique()
+        default_region = [] if st.session_state.reset_filters else df["region"].dropna().unique()
+        default_provider = [] if st.session_state.reset_filters else df["provider_type"].dropna().unique()
+        default_diag = [] if st.session_state.reset_filters else df["primary_diagnosis"].dropna().unique()
+        
         sel_gender = st.multiselect(
             "Gender", options=df["gender"].dropna().unique(), 
-            default=df["gender"].dropna().unique(),
+            default=default_gender,
             help="Filter claims by patient gender."
         )
         sel_region = st.multiselect(
             "Region", options=df["region"].dropna().unique(), 
-            default=df["region"].dropna().unique(),
+            default=default_region,
             help="Filter claims by geographical region."
         )
         sel_provider = st.multiselect(
             "Provider Type", options=df["provider_type"].dropna().unique(), 
-            default=df["provider_type"].dropna().unique(),
+            default=default_provider,
             help="Filter claims by the type of healthcare provider."
         )
         sel_diag = st.multiselect(
             "Primary Diagnosis", options=df["primary_diagnosis"].dropna().unique(), 
-            default=df["primary_diagnosis"].dropna().unique(),
+            default=default_diag,
             help="Filter claims by primary diagnosis code."
         )
         age_min, age_max = int(df["age"].min(skipna=True)), int(df["age"].max(skipna=True))
-        age_range = st.slider("Age Range", age_min, age_max, (age_min, age_max),
+        default_age_range = (age_min, age_max)
+        
+        age_range = st.slider("Age Range", age_min, age_max, default_age_range,
                              help="Filter patients by age range.")
         
         submit_button = st.form_submit_button(label='Apply Filters')
+        
+        # Reset the reset_filters flag after form submission
+        if submit_button and st.session_state.reset_filters:
+            st.session_state.reset_filters = False
 
 # --- 4. Data Filtering and Preprocessing ---
 # Handle empty selections
@@ -284,41 +307,57 @@ with col2_op:
     metric_choice = st.radio("Metric", ["Total Cost", "Claim Count"], horizontal=True,
                              key="geo_metric_radio")
     
-    # FIXED: Filter out "Unknown" states and ensure proper state aggregation
+    # FIXED: Proper state filtering and aggregation for choropleth
     state_filtered = df_filtered[df_filtered["state"] != "Unknown"].copy()
-    state_agg = state_filtered.groupby("state").agg(
-        claim_count=("claim_cost", "size"),
-        total_cost=("claim_cost", "sum")
-    ).reset_index()
     
-    color_col = "total_cost" if metric_choice == "Total Cost" else "claim_count"
-    map_title = f"{metric_choice} by State"
-    color_label = f"{metric_choice} (USD)" if metric_choice == "Total Cost" else "Claim Count"
+    if not state_filtered.empty:
+        state_agg = state_filtered.groupby("state").agg(
+            claim_count=("claim_cost", "size"),
+            total_cost=("claim_cost", "sum")
+        ).reset_index()
+        
+        color_col = "total_cost" if metric_choice == "Total Cost" else "claim_count"
+        map_title = f"{metric_choice} by State"
+        color_label = f"{metric_choice} (USD)" if metric_choice == "Total Cost" else "Claim Count"
+        
+        # Debug info
+        print("State aggregation data:")
+        print(state_agg.head())
+        print(f"Color column '{color_col}' range: {state_agg[color_col].min()} to {state_agg[color_col].max()}")
+        
+        # FIXED: Improved choropleth map with state abbreviations
+        fig_map = px.choropleth(
+            state_agg, 
+            locations="state", 
+            locationmode="USA-states",
+            color=color_col, 
+            color_continuous_scale="Blues",
+            range_color=[state_agg[color_col].min(), state_agg[color_col].max()],
+            scope="usa",
+            title=map_title, 
+            labels={color_col: color_label},
+            hover_name="state",
+            hover_data={color_col: ':,.0f'}
+        )
+        
+        # Update layout for better visualization
+        fig_map.update_layout(
+            geo=dict(
+                showframe=False,
+                showcoastlines=True,
+                projection_type='albers usa'
+            ),
+            title_x=0.5,
+            coloraxis_colorbar=dict(
+                title=color_label,
+                tickformat=".0f" if metric_choice == "Claim Count" else "$,.0f"
+            )
+        )
+        
+        st.plotly_chart(fig_map, use_container_width=True)
+    else:
+        st.warning("No state data available for the current filters.")
     
-    # FIXED: Improved choropleth map with better color scaling
-    fig_map = px.choropleth(
-        state_agg, 
-        locations="state", 
-        locationmode="USA-states",
-        color=color_col, 
-        color_continuous_scale="Blues", 
-        scope="usa",
-        title=map_title, 
-        labels={color_col: color_label},
-        hover_data={color_col: ':,.0f'}
-    )
-    
-    # Update layout for better visualization
-    fig_map.update_layout(
-        geo=dict(
-            showframe=False,
-            showcoastlines=True,
-            projection_type='albers usa'
-        ),
-        title_x=0.5
-    )
-    
-    st.plotly_chart(fig_map, use_container_width=True)
     st.markdown("""
         _A geographic map highlights areas with high claims activity. This insight can guide
         resource allocation and provider network expansion strategies._
@@ -456,7 +495,6 @@ with col2_demo:
 st.divider()
 
 # --- 10. Data Quality and Metadata Section ---
-st.divider()
 with st.expander(":material/database: **Data Quality Overview & Source Metadata**"):
     st.markdown("""
     _This section provides transparency on the data's health and its source.
