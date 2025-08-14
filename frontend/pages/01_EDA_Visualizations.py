@@ -111,7 +111,7 @@ df_filtered = df[
     df["region"].isin(sel_region) &
     df["provider_type"].isin(sel_provider) &
     df["primary_diagnosis"].isin(sel_diag) &
-    df["age"].between(age_range, age_range[1])
+    df["age"].between(age_range[0], age_range[1])
 ].copy()
 
 # Handle missing data for visualizations
