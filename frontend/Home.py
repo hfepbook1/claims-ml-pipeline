@@ -25,8 +25,7 @@ except KeyError:
     st.warning("MLflow configuration not found in secrets. Some features may be limited.")
 
 # ===== MAIN HEADER =====
-st.title("Healthcare Claims ML Pipeline")
-st.subheader("Production-ready machine learning for healthcare analytics")
+st.title("Healthcare Claims ML Pipeline Application")
 
 # ===== SIDEBAR NAVIGATION =====
 with st.sidebar:
@@ -39,22 +38,9 @@ with st.sidebar:
     - **Readmission Prediction**: Assess 30-day readmission risk
     """)
     
-    # System Status Check
-    st.header("System Status")
-    try:
-        response = requests.get(f"{BACKEND_URL}/health", timeout=5)
-        if response.status_code == 200:
-            st.success("API Online")
-            api_status = "Online"
-        else:
-            st.warning("API Issues")
-            api_status = "Issues"
-    except:
-        st.error("API Offline")
-        api_status = "Offline"
 
 # ===== KEY METRICS OVERVIEW =====
-st.header("System Overview")
+st.subheader("System Overview")
 
 col1, col2, col3, col4 = st.columns(4)
 
@@ -67,12 +53,7 @@ with col2:
 with col3:
     st.metric("API Response Time", "<200ms", help="Real-time prediction latency")
 
-with col4:
-    st.metric("Backend Status", api_status, help="Current API server status")
-
 # ===== MAIN FEATURES =====
-st.header("What You Can Do")
-
 tab1, tab2, tab3, tab4 = st.tabs(["Cost Prediction", "Fraud Detection", "Readmission Prediction", "Interactive Analytics"])
 
 with tab1:
@@ -311,17 +292,6 @@ with st.expander("View Sample Data Structure"):
         ]
     }
     st.dataframe(sample_data, use_container_width=True)
-
-# ===== FOOTER =====
-st.divider()
-col1, col2, col3 = st.columns([1, 2, 1])
-with col2:
-    st.write("**Healthcare Claims ML Pipeline**")
-    st.caption(f"Production-ready ML for healthcare analytics | Last updated: {datetime.now().strftime('%B %Y')}")
-    
-    if st.button("🚀 Get Started", type="primary", use_container_width=True):
-        st.success("Use the sidebar navigation to explore the application features!")
-        st.balloons()
 
 # ===== FIRST VISIT WELCOME =====
 if "welcomed" not in st.session_state:
